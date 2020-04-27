@@ -19,7 +19,7 @@
 #define ANTI_EXPLORATION
 #endif
 
-namespace CTSat
+namespace ctsat
 {
 
 template <typename Database>

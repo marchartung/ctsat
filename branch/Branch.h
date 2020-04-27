@@ -16,7 +16,7 @@
 #include "core/Statistic.h"
 #include "core/SolveMode.h"
 
-namespace CTSat
+namespace ctsat
 {
 
 template <typename Database>

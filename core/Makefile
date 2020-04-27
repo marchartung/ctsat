@@ -1,4 +1,4 @@
-EXEC      = glucose
+EXEC      = ctsat
 DEPDIR    = mtl utils initial
 MROOT     = ../
 

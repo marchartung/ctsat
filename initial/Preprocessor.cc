@@ -1,36 +1,36 @@
-/*****************************************************************************************[Main.cc]
-CTSat -- Copyright (c) 2020, Marc Hartung
-                        Zuse Institute Berlin, Germany
+/*****************************************************************************************
+ CTSat -- Copyright (c) 2020, Marc Hartung
+ Zuse Institute Berlin, Germany
 
-Maple_LCM_Dist_Chrono -- Copyright (c) 2018, Vadim Ryvchin, Alexander Nadel
+ Maple_LCM_Dist_Chrono -- Copyright (c) 2018, Vadim Ryvchin, Alexander Nadel
 
-GlucoseNbSAT -- Copyright (c) 2016,Chu Min LI,Mao Luo and Fan Xiao
-                           Huazhong University of science and technology, China
-                           MIS, Univ. Picardie Jules Verne, France
+ GlucoseNbSAT -- Copyright (c) 2016,Chu Min LI,Mao Luo and Fan Xiao
+ Huazhong University of science and technology, China
+ MIS, Univ. Picardie Jules Verne, France
 
-MapleSAT -- Copyright (c) 2016, Jia Hui Liang, Vijay Ganesh
+ MapleSAT -- Copyright (c) 2016, Jia Hui Liang, Vijay Ganesh
 
-MiniSat -- Copyright (c) 2003-2006, Niklas Een, Niklas Sorensson
-           Copyright (c) 2007-2010  Niklas Sorensson
+ MiniSat -- Copyright (c) 2003-2006, Niklas Een, Niklas Sorensson
+ Copyright (c) 2007-2010  Niklas Sorensson
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the
-"Software"), to deal in the Software without restriction, including
-without limitation the rights to use, copy, modify, merge, publish,
-distribute, sublicense, and/or sell copies of the Software, and to
-permit persons to whom the Software is furnished to do so, subject to
-the following conditions:
+ Permission is hereby granted, free of charge, to any person obtaining a
+ copy of this software and associated documentation files (the
+ "Software"), to deal in the Software without restriction, including
+ without limitation the rights to use, copy, modify, merge, publish,
+ distribute, sublicense, and/or sell copies of the Software, and to
+ permit persons to whom the Software is furnished to do so, subject to
+ the following conditions:
 
-The above copyright notice and this permission notice shall be included
-in all copies or substantial portions of the Software.
+ The above copyright notice and this permission notice shall be included
+ in all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+ OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+ LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  **************************************************************************************************/
 
 #include "mtl/Sort.h"
@@ -41,7 +41,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <cstdio>
 #include <zlib.h>
 
-namespace CTSat
+namespace ctsat
 {
 
 //=================================================================================================
@@ -146,10 +146,10 @@ bool Preprocessor::readInstance(std::string const & filename)
    if (verb > 0)
    {
       printf("c ##############################   Initial  ############################\n");
-      size_t pos = filename.find_last_of('/')+1;
-      if(pos == std::string::npos)
+      size_t pos = filename.find_last_of('/') + 1;
+      if (pos == std::string::npos)
          pos = 0;
-      std::string satName = filename.substr(pos,filename.size());
+      std::string satName = filename.substr(pos, filename.size());
       printf("c name: %s \n", satName.c_str());
       printf("c nVars: %12d nCls:%12d IO time:%3.2fs\n", ig.nVars(), clauses.size(),
              cpuTime() - initial_time);
@@ -171,7 +171,7 @@ SatInstance Preprocessor::getInstance(std::string const & filename)
       Var const v = ig.getTrailLit(i).var();
       assert(model[v].isUndef());
       model[v] = ig.value(v);
-      if(eliminated[v])
+      if (eliminated[v])
          --eliminated_vars;
 
    }
@@ -180,8 +180,8 @@ SatInstance Preprocessor::getInstance(std::string const & filename)
                    std::move(drat));
    assert(res.isClean());
    printf("c #########################  after Preprocessor  #######################\n");
-   printf("c nVars: %12d nCls:%12d    time:%3.2fs\n", ig.nVars()-ig.nAssigns()-eliminated_vars, res.clauses.size(),
-          preprocessTime.getPassedTime());
+   printf("c nVars: %12d nCls:%12d    time:%3.2fs\n", ig.nVars() - ig.nAssigns() - eliminated_vars,
+          res.clauses.size(), preprocessTime.getPassedTime());
    printf("c ######################################################################\n\n");
    return res;
 }
@@ -256,12 +256,13 @@ bool Preprocessor::addClause(vec<Lit>& ps, bool const initial)
       subsumption_queue.insert(cr);
       for (int i = 0; i < c.size(); i++)
       {
-         occurs[c[i].var()].push(cr);
+         Var const v = c[i].var();
+         occurs[v].push(cr);
          n_occ[toInt(c[i])]++;
-         touched[c[i].var()] = 1;
+         touched[v] = 1;
          n_touched++;
-         if (elim_heap.inHeap(c[i].var()))
-            elim_heap.increase(c[i].var());
+         if (elim_heap.inHeap(v))
+            elim_heap.increase(v);
       }
    }
 
@@ -286,8 +287,7 @@ void Preprocessor::removeClause(CRef const cr)
       Lit implied = c.size() != 2 ? c[0] : (ig.value(c[0]).isTrue() ? c[0] : c[1]);
       ig.reason((implied.var())) = CRef_Undef;
    }
-   c.mark(1u);
-   ca.free(cr);
+   ca.remove(cr);
 }
 
 bool Preprocessor::strengthenClause(CRef cr, Lit l)
@@ -503,7 +503,7 @@ bool Preprocessor::backwardSubsumptionCheck(bool verbose)
    return true;
 }
 
-bool Preprocessor::eliminateVar(Var v)
+bool Preprocessor::eliminateVar(Var const v)
 {
    assert(!isEliminated(v));
    assert(ig.value(v).isUndef());
@@ -638,6 +638,87 @@ bool Preprocessor::removeRedundant(bool const removeFalseLits)
    return true;
 }
 
+bool Preprocessor::eliminateVarMinimal(Var const v)
+{
+   assert(!isEliminated(v));
+   assert(ig.value(v).isUndef());
+
+// Split the occurrences into positive and negative:
+//
+   const vec<CRef>& cls = occurs.lookup(v);
+   vec<CRef> pos, neg;
+   for (int i = 0; i < cls.size(); i++)
+      (find(ca[cls[i]], Lit(v, false)) ? pos : neg).push(cls[i]);
+
+// Delete and store old clauses:
+   eliminated[v] = true;
+   branch.setDecisionVar(v, false);
+   eliminated_vars++;
+
+   if (pos.size() > neg.size())
+   {
+      for (int i = 0; i < neg.size(); i++)
+         elimDb.addElimClause(v, ca[neg[i]]);
+      elimDb.addElimUnit(Lit(v, false));
+   } else
+   {
+      for (int i = 0; i < pos.size(); i++)
+         elimDb.addElimClause(v, ca[pos[i]]);
+      elimDb.addElimUnit(Lit(v, true));
+   }
+
+// Produce clauses in cross product:
+   vec<Lit>& resolvent = add_tmp;
+   for (int i = 0; i < pos.size(); i++)
+      for (int j = 0; j < neg.size(); j++)
+         if (merge(ca[pos[i]], ca[neg[j]], v, resolvent) && !addClause(resolvent))
+            return false;
+
+   for (int i = 0; i < cls.size(); i++)
+      removeClause(cls[i]);
+
+// Free occurs list for this variable:
+   occurs[v].clear(true);
+
+// Free watchers lists for this variable, if possible:
+   propEngine.removeVar(v);
+
+   return true;
+}
+
+bool Preprocessor::eliminateMinimalNiver()
+{
+   if (!removeRedundant())
+      return setOk(false);
+
+   while (!elim_heap.empty())
+   {
+      Var const elim = elim_heap.removeMin();
+
+
+      uint32_t const npos =  n_occ[Lit(elim, false).toInt()], nneg = n_occ[Lit(elim, true).toInt()];
+
+      if (npos > 1 && nneg > 1)
+         break;
+      if (hasInterrupt())
+         break;
+
+      if (isEliminated(elim) || !ig.value(elim).isUndef())
+         continue;
+
+      // At this point, the variable may have been set by assymetric branching, so check it
+      // again. Also, don't eliminate frozen variables:
+      if (ig.value(elim).isUndef() && !eliminateVarMinimal(elim))
+      {
+         setOk(false);
+         break;
+      }
+
+      garbageCollect();
+   }
+   return true;
+}
+
 // The technique and code are by the courtesy of the GlueMiniSat team. Thank you!
 // It helps solving certain types of huge problems tremendously.
 
@@ -652,7 +733,13 @@ bool Preprocessor::eliminate()
 // User disabling preprocessing.
 
    n_cls_init = nClauses();
-
+   if (nClauses() > 480000)
+   {
+      if(verb > 0)
+         std::cout << "c using Niver on variables with less occurances\nc too many clauses in instance for SatElite!\n";
+      eliminateMinimalNiver();
+      goto cleanup;
+   }
    eliminate_();  // The first, usual variable elimination of MiniSat.
    if (!isOk())
       goto cleanup;
@@ -725,7 +812,7 @@ bool Preprocessor::eliminate_()
 {
    assert(elim);
    if (!removeRedundant())
-      return false;
+      return setOk(false);
 
    int trail_size_last = ig.nAssigns();
 
@@ -774,7 +861,7 @@ bool Preprocessor::eliminate_()
             goto cleanup;
          }
 
-         // FIXME solver.checkGarbage(simp_garbage_frac);
+         garbageCollect();
       }
 
       assert(subsumption_queue.size() == 0);

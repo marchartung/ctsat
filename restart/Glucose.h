@@ -1,4 +1,4 @@
-/*****************************************************************************************[Main.cc]
+/*****************************************************************************************
 CTSat -- Copyright (c) 2020, Marc Hartung
                         Zuse Institute Berlin, Germany
 
@@ -41,7 +41,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "core/SolveMode.h"
 #include "core/Statistic.h"
 
-namespace CTSat
+namespace ctsat
 {
 
 class GlucoseRestart
@@ -52,7 +52,7 @@ class GlucoseRestart
 
    void notifyRestart();
    void notifyConflictFound();
-   void notifyConflictResolved(int const lbd);
+   void clauseLearnt(int const lbd);
    bool shouldRestart();
 
  private:
@@ -95,7 +95,7 @@ inline void GlucoseRestart::notifyRestart()
    lbd_queue.clear();
 }
 
-inline void GlucoseRestart::notifyConflictResolved(const int lbd)
+inline void GlucoseRestart::clauseLearnt(const int lbd)
 {
 
    cached = false;

@@ -1,36 +1,36 @@
-/*****************************************************************************************[Main.cc]
-CTSat -- Copyright (c) 2020, Marc Hartung
-                        Zuse Institute Berlin, Germany
+/*****************************************************************************************
+ CTSat -- Copyright (c) 2020, Marc Hartung
+ Zuse Institute Berlin, Germany
 
-Maple_LCM_Dist_Chrono -- Copyright (c) 2018, Vadim Ryvchin, Alexander Nadel
+ Maple_LCM_Dist_Chrono -- Copyright (c) 2018, Vadim Ryvchin, Alexander Nadel
 
-GlucoseNbSAT -- Copyright (c) 2016,Chu Min LI,Mao Luo and Fan Xiao
-                           Huazhong University of science and technology, China
-                           MIS, Univ. Picardie Jules Verne, France
+ GlucoseNbSAT -- Copyright (c) 2016,Chu Min LI,Mao Luo and Fan Xiao
+ Huazhong University of science and technology, China
+ MIS, Univ. Picardie Jules Verne, France
 
-MapleSAT -- Copyright (c) 2016, Jia Hui Liang, Vijay Ganesh
+ MapleSAT -- Copyright (c) 2016, Jia Hui Liang, Vijay Ganesh
 
-MiniSat -- Copyright (c) 2003-2006, Niklas Een, Niklas Sorensson
-           Copyright (c) 2007-2010  Niklas Sorensson
+ MiniSat -- Copyright (c) 2003-2006, Niklas Een, Niklas Sorensson
+ Copyright (c) 2007-2010  Niklas Sorensson
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the
-"Software"), to deal in the Software without restriction, including
-without limitation the rights to use, copy, modify, merge, publish,
-distribute, sublicense, and/or sell copies of the Software, and to
-permit persons to whom the Software is furnished to do so, subject to
-the following conditions:
+ Permission is hereby granted, free of charge, to any person obtaining a
+ copy of this software and associated documentation files (the
+ "Software"), to deal in the Software without restriction, including
+ without limitation the rights to use, copy, modify, merge, publish,
+ distribute, sublicense, and/or sell copies of the Software, and to
+ permit persons to whom the Software is furnished to do so, subject to
+ the following conditions:
 
-The above copyright notice and this permission notice shall be included
-in all copies or substantial portions of the Software.
+ The above copyright notice and this permission notice shall be included
+ in all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+ OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+ LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  **************************************************************************************************/
 
 #ifndef SOURCES_MPI_MPISOLVERUNNER_H_
@@ -39,8 +39,12 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "parallel/ParallelSolveRunner.h"
 #include "mpi/MPIBroadcastConnector.h"
 #include "mpi/MPIExportFilter.h"
+#include "mpi/MPISatDistributor.h"
+#include "mpi/MPIPartitioner.h"
+#include "mpi/MPISolverConfig.h"
+#include "utils/Logger.h"
 
-namespace CTSat
+namespace ctsat
 {
 
 class MPISolverRunner : public ParallelSolverRunner<MPIBroadcastConnector>
@@ -49,7 +53,28 @@ class MPISolverRunner : public ParallelSolverRunner<MPIBroadcastConnector>
    typedef ParallelSolverRunner<MPIBroadcastConnector> Super;
    typedef Super::ConnType ConnType;
    typedef Super::TData TData;
-   typedef Super::SolverMemory SolverMemory;
+
+   struct MPIMemory
+   {
+      MPIPartitioner partitioner;
+      MPISolverConfig config;
+      int nthreads;
+      MPISatDistributor distributor;
+      MPIBroadcastConnector conn;
+      SatInstance inst;
+      std::vector<TData> tdata;
+      MPIMemory()
+            : partitioner(),
+              config(partitioner.getGlobalRank()),
+              nthreads(config.getNumThreads()),
+              distributor(),
+              conn((partitioner.isFilter()) ?
+                    0 : Inputs::mbExchangeBufferPerThread * 1024ul * 1024ul,
+                   Inputs::mpiMbBufferSize * 1024ul * 1024ul, config.getNumThreads() + 1,  // +1 one because mpi thread reads too
+                   config.getMaxNumThreads(), partitioner.getPartitionComm())
+      {
+      }
+   };
 
    static void printSolverAnnouncement()
    {
@@ -61,54 +86,128 @@ class MPISolverRunner : public ParallelSolverRunner<MPIBroadcastConnector>
    static lbool run()
    {
       Timer initTime;
-      std::shared_ptr<SolverMemory> mem = std::make_shared<SolverMemory>();
-      if(mem->conn.isRoot() && Inputs::verb > 0)
-         printSolverAnnouncement();
-      if (mem->conn.isRoot())
-      {
-         if (!sendInstance(mem))
-            return lbool::False();
-      } else if (!receiveInstance(mem))
-         return lbool::False();
-
-      // start solving
-      startThreads(mem, mem->conn.getRank());
-      mem->conn.freeInstance();
-      if (mem->conn.isRoot())
+      std::shared_ptr<MPIMemory> mem = init();
+      if (mem->partitioner.isRoot())
          std::cout << "c init time: " << initTime.getPassedTime() << std::endl;
-      runLoop(mem->conn, mem->tdata, mem->inst);
-      lbool res = finalizeResult(mem->conn, mem->inst);
-      joinThreads(mem->conn, mem->tdata);
-      if (mem->conn.isRoot())
+      // start solving
+      lbool res = lbool::Undef();
+      if (mem->tdata.empty())
+      {
+         LOG("Solved through preprocessor")
+         res = lbool::False();
+      } else
+      {
+         if (!mem->partitioner.isFilter())
+            runLoop(*mem);
+         else
+            runLoopFilter(*mem);
+      }
+      res = finalizeResult(*mem);
+      if (mem->partitioner.isRoot())
          std::cout << "c complete time: " << initTime.getPassedTime() << std::endl;
+      deinit(mem);
       return res;
    }
 
  protected:
 
-   static bool sendInstance(std::shared_ptr<SolverMemory> mem)
+   static void deinit(std::shared_ptr<MPIMemory> & mem)
    {
-      uint64_t nBytes = 0;
-      void const * data = nullptr;
-      mem->inst = getInstance((*Inputs::argv)[1]);
-      if (mem->inst.isOk())
-      {
-         nBytes = mem->inst.ca.nBytes();
-         data = mem->inst.ca.data();
-         assert(mem->inst == SatInstance(data, nBytes));
-      }
-      mem->conn.sendInstance(data, nBytes);
-      return mem->inst.isOk();
+      LOG("Joining threads")
+      joinThreads(mem->conn, mem->tdata);
+      LOG("Clear memory")
+      mem.reset();
+      LOG("Finalize mpi")
+      MPI_Finalize();
+      LOG_DEINIT;
    }
 
-   static bool receiveInstance(std::shared_ptr<SolverMemory> mem)
+   static std::shared_ptr<MPIMemory> init()
    {
-      std::tuple<void const *, uint64_t> rData = mem->conn.receiveInstance();
+      MPI_Init(Inputs::argc, Inputs::argv);
+      std::shared_ptr<MPIMemory> mem = std::make_shared<MPIMemory>();
+
+      LOG_INIT(mem->partitioner.getGlobalRank());
+      if (mem->partitioner.isRoot() && Inputs::verb > 0)
+         printSolverAnnouncement();
+      if (mem->partitioner.isRoot())
+      {
+         if (!sendInstance(*mem))
+            return mem;
+      } else if (!receiveInstance(*mem))
+         return mem;
+      if (!mem->partitioner.isFilter())
+         startThreads(mem->config.getNumThreads(), mem->tdata, mem->conn, mem->inst,
+                      mem->partitioner.getGlobalRank());
+      else
+         startFilterThreads(mem->config.getNumThreads(), mem->tdata, mem->conn, mem->inst,
+                            mem->partitioner.getGlobalRank());
+      mem->distributor.freeInstance();
+      mem->conn.waitInitialize(mem->tdata.size());
+      mem->inst.ca.clear(true);
+      return mem;
+   }
+   static void startFilterThreads(
+                                  size_t const threadCount,
+                                  std::vector<TData> & tdata,
+                                  ConnType & conn,
+                                  SatInstance const & inst,
+                                  int const rank = 0)
+   {
+      LOG("Starting " + std::to_string(threadCount) + " filter threads")
+      tdata.reserve(threadCount);
+
+      for (size_t i = 0; i < threadCount; ++i)
+      {
+         tdata.emplace_back(TData(inst, conn, i, rank));
+         if (!startFilterThread(tdata[i]))
+            throw InputException();  // FIXME stop started threads
+      }
+   }
+   static void * pthreadStartFilter(void * v)
+   {
+      ThreadData<ConnType> & data = *reinterpret_cast<ThreadData<ConnType>*>(v);
+      LOG_INIT(data.rank)
+      LOG("Filter thread " + std::to_string(pthread_self()) + " started")
+      SolverRunner::runDatabase<ConnType>(data.config, v);
+      LOG("Thread finished")
+      LOG_DEINIT
+      pthread_exit(NULL);
+   }
+
+   static bool startFilterThread(TData & d)
+   {
+      void * data = &d;
+      int res = pthread_create(&d.pthreadId, NULL, MPISolverRunner::pthreadStartFilter, data);
+      LOG("Started thread " + std::to_string(d.pthreadId));
+      return res == 0;
+   }
+
+   static bool sendInstance(MPIMemory& mem)
+   {
+      LOG("Sending instance")
+      uint64_t nBytes = 0;
+      void const * data = nullptr;
+      mem.inst = getInstance((*Inputs::argv)[1], SolverConfig::getInputConfig());
+      if (mem.inst.isOk())
+      {
+         nBytes = mem.inst.ca.nBytes();
+         data = mem.inst.ca.data();
+         assert(mem.inst == SatInstance(data, nBytes));
+      }
+      mem.distributor.sendInstance(data, nBytes);
+      return mem.inst.isOk();
+   }
+
+   static bool receiveInstance(MPIMemory& mem)
+   {
+      LOG("Receive instance")
+      std::tuple<void const *, uint64_t> rData = mem.distributor.receiveInstance();
       if (std::get<1>(rData) == 0)
          return false;
       else
       {
-         mem->inst = SatInstance(std::get<0>(rData), std::get<1>(rData));
+         mem.inst = SatInstance(std::get<0>(rData), std::get<1>(rData));
          return true;
       }
    }
@@ -120,13 +219,15 @@ class MPISolverRunner : public ParallelSolverRunner<MPIBroadcastConnector>
       for (size_t i = 0; i < tdata.size(); ++i)
          stat.add(*tdata[i].stat);
    }
-   static void runLoop(ConnType & conn, std::vector<TData> & tdata, SatInstance & inst)
+   static void runLoop(MPIMemory& mem)
    {
-      int const verb = (conn.isRoot()) ? Inputs::verb : -1;
-      conn.waitInitialize(tdata.size());
+      LOG("Starts main loop")
+      MPIBroadcastConnector & conn = mem.conn;
+      int const verb = (mem.partitioner.isRoot()) ? Inputs::verb : -1;
       Timer printTimer(Inputs::print_interval), sendTimer(Inputs::mpi_send_interval);
-      MPIStatistc h(conn.getRank());
-      MPIExportFilter<ClauseAllocator> filter(conn);
+      MPIStatistc h;
+      MPIExportFilter<ClauseAllocator> filter(
+            conn, Inputs::mpiHashClauseFilter && !mem.partitioner.hasFilterNodes());
       bool readClauses = true;
 
       while (conn.nRunningThreads() > 0 && !conn.isFinished())
@@ -143,61 +244,126 @@ class MPISolverRunner : public ParallelSolverRunner<MPIBroadcastConnector>
          {
             if (!readClauses)
             {
+               LOG("Reads received clauses")
                filter.readRecvClauses();
                readClauses = true;
             } else if (sendTimer.isOver())
             {
-               updateStat(h, tdata);
+               updateStat(h, mem.tdata);
                sendTimer.reset();
                filter.addLocalClausesToConn();
+               LOG("Sends clauses")
                conn.send(h);
                readClauses = false;
             }
-         }
-         else
+         } else
             conn.sleep();
       }
-      if (!conn.getResult().isUndef() || conn.isAborted())
-      {
-         h.abort = conn.isAborted();
-         h.res = conn.getResult();
-         updateStat(h, tdata);
-         conn.sendResult(h);
-         h.res = conn.getResult();
-         if (h.res.isTrue())
-            conn.sendModel();
-      }
-      if (verb > 0)
-      {
-         conn.getAccumulatedHeader().print();
-         filter.printState();
-      }
+      LOG("Exit main loop")
+      updateStat(h, mem.tdata);
+      LOG("Sends abort")
+      conn.abort(h);
    }
 
-   static lbool finalizeResult(ConnType & conn, SatInstance & inst)
+   static void runLoopFilter(MPIMemory& mem)
    {
-      lbool ret = conn.getResult();
-      if (conn.isRoot())
+      LOG("Starts filter loop")
+      MPIBroadcastConnector & conn = mem.conn;
+      assert(!mem.partitioner.isRoot());
+      Timer printTimer(Inputs::print_interval), sendTimer(Inputs::mpi_send_interval);
+      MPIStatistc h;
+
+      bool readClauses = true;
+
+      while (conn.nRunningThreads() > 0 && !conn.isFinished())
       {
-         ret = conn.receiveResult(inst.model.size());
+         conn.progress();
+         if (conn.isAllowedToSend())
+         {
+            if (!readClauses)
+            {
+               LOG("Reads received clauses")
+               readClauses = true;
+            } else if (sendTimer.isOver())
+            {
+               updateStat(h, mem.tdata);
+               sendTimer.reset();
+               LOG("Sends clauses")
+               conn.send(h);
+               readClauses = false;
+            }
+         } else
+            conn.sleep();
+      }
+      LOG("Exit main loop")
+      updateStat(h, mem.tdata);
+      LOG("Sends abort")
+      conn.abort(h);
+   }
+   static lbool finalizeResult(MPIMemory & mem)
+   {
+      LOG("Finalize result")
+      bool isWinner = false;
+      lbool ret = mem.conn.getResult();
+      if (!ret.isUndef() && mem.distributor.trySetRootResult(ret))
+      {
+         isWinner = true;
+
+         LOG("Won the race")
+         if (!mem.partitioner.isRoot() && ret.isTrue())
+         {
+            LOG("Sending model")
+            mem.distributor.sendModel(mem.conn.getModel());
+         }
+      }
+      if (mem.partitioner.isRoot())
+      {
+         if (!isWinner)
+         {
+            LOG("Receives result")
+            ret = mem.distributor.getRootResult();
+         }
+
          printf(
                ret.isTrue() ? "s SATISFIABLE\n" :
                ret.isFalse() ? "s UNSATISFIABLE\n" : "s UNKNOWN\n");
          if (ret.isTrue())
          {
-            EliminatedClauseDatabase const & elimDb = inst.elimDb;
-            vec<lbool> & model = conn.getModel();
-            for (int i = 0; i < inst.model.size(); ++i)
-               model[i] = (inst.model[i].isUndef()) ? model[i] : inst.model[i];
-            elimDb.extendModel(model);
-            if (Inputs::model)
-               elimDb.printModel(model);
-            if (Inputs::verifySat)
+
+            vec<lbool> model;
+            if (!isWinner)
             {
-               if (ModelChecker::checkSat(model, (*Inputs::argv)[1]))
-                  std::cout << "c SAT solution is correct\n";
-               else
-                  std::cout << "c Solution is WRONG!!!!\n";
+               LOG("Receives model")
+               model.growTo(mem.inst.model.size(), lbool::Undef());
+               mem.distributor.receiveModel(model);
+            } else
+               mem.conn.getModel().swap(model);
+            if (ret.isTrue())
+            {
+               LOG("Sets up model")
+               std::cout << "Winner rank: " << mem.distributor.getWinner() << std::endl;
+               SatInstance & inst = mem.inst;
+               EliminatedClauseDatabase const & elimDb = inst.elimDb;
+               for (int i = 0; i < mem.inst.model.size(); ++i)
+               {
+                  //assert(inst.model[i] == model[i] || inst.model[i].isUndef() || model[i].isUndef());
+                  if (!(inst.model[i] == model[i] || inst.model[i].isUndef() || model[i].isUndef()))
+                  {
+                     std::cout << "i=" << i << " was diff: " << inst.model[i].toInt() << " to "
+                               << model[i].toInt() << "\n";
+                  }
+                  inst.model[i] = (inst.model[i].isUndef()) ? model[i] : inst.model[i];
+               }
+               elimDb.extendModel(inst.model);
+               if (Inputs::model)
+                  elimDb.printModel(inst.model);
+               if (Inputs::verifySat)
+               {
+                  if (ModelChecker::checkSat(inst.model, (*Inputs::argv)[1]))
+                     std::cout << "c SAT solution is correct\n";
+                  else
+                     std::cout << "c Solution is WRONG!!!!\n";
+               }
             }
          }
       }

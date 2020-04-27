@@ -1,4 +1,4 @@
-/*****************************************************************************************[Main.cc]
+/*****************************************************************************************
 CTSat -- Copyright (c) 2020, Marc Hartung
                         Zuse Institute Berlin, Germany
 
@@ -42,48 +42,10 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "initial/SolverConfig.h"
 #include "initial/Inputs.h"
 #include "mtl/Vec.h"
+#include "exchange/ExportClause.h"
 
-namespace CTSat
+namespace ctsat
 {
-
-template <typename Database>
-struct ExportClause
-{
-   typedef typename Database::Clause Clause;
-   typedef typename Database::Lit Lit;
-
-   ExportClause() = delete;
-   ExportClause(ExportClause<Database> &&) = delete;
-   ExportClause<Database>& operator=(ExportClause<Database> const&) = delete;
-   ExportClause<Database>& operator=(ExportClause<Database> &&) = delete;
-
-   uint16_t id;
-   uint16_t lbd;
-   int const sz;
-   Lit clause[1];
-   ExportClause(Clause const & c, unsigned const lbd, unsigned const id);
-   ExportClause(ExportClause<Database> const & in);
-   ExportClause(Lit const & l, unsigned const id);
-   static uint64_t nbytes(Clause const & c);
-   static uint64_t nbytes(Lit const & l);
-   static uint64_t nbytes(ExportClause<Database> const & c);
-   int size() const
-   {
-      return sz;
-   }
-   Lit const & operator[](int const idx) const
-   {
-      return clause[idx];
-   }
-
-   void set(Clause & c, bool const minimizeClause) const
-   {
-      c.set_lbd(lbd);
-      c.setSimplified(!minimizeClause);
-   }
-
-
-};
 
 template <typename Database, typename Connector, typename PropEngine>
 class SimpleClauseExchanger : public NoClauseExchanger<Database, Connector, PropEngine>
@@ -117,6 +79,7 @@ class SimpleClauseExchanger : public NoClauseExchanger<Database, Connector, Prop
 
    void relocAll(Database& to);
 
+
  protected:
    bool const minimize_import_cl;
    int max_export_lbd;
@@ -148,15 +111,15 @@ class SimpleClauseExchanger : public NoClauseExchanger<Database, Connector, Prop
    }
 
    template <typename ... Args>
-   void exportClause(uint64_t const nBytes, Args ... args)
+   bool exportClause(uint64_t const nBytes, Args ... args)
    {
-      Super::conn.template exchange<ExClause, Args...>(nBytes, args...);
+      bool const exported = Super::conn.template exchange<ExClause, Args...>(nBytes, args...);
       ++Super::stat.nSendClauses;
-      if (Super::conn.shouldImport(curReadPos))
-         fetchClauses();
+      Super::stat.nLostClauses += !exported;
+      return exported;
    }
 
-   void exportClause(Clause const & c);
+   bool exportClause(Clause const & c);
 
 };
 template <typename Database, typename Connector, typename PropEngine>
@@ -166,9 +129,9 @@ inline bool SimpleClauseExchanger<Database, Connector, PropEngine>::shouldFetch(
 }
 
 template <typename Database, typename Connector, typename PropEngine>
-void SimpleClauseExchanger<Database, Connector, PropEngine>::exportClause(Clause const & c)
+bool SimpleClauseExchanger<Database, Connector, PropEngine>::exportClause(Clause const & c)
 {
-   exportClause<Clause const &, unsigned const, unsigned const>(ExportClause<Database>::nbytes(c),
+   return exportClause<Clause const &, unsigned const, unsigned const>(ExportClause<Database>::nbytes(c),
                                                                 c, c.lbd(), id);
 }
 
@@ -263,7 +226,7 @@ inline SimpleClauseExchanger<Database, Connector, PropEngine>::SimpleClauseExcha
         max_export_lbd(config.max_export_lbd),
         max_export_sz(config.max_export_sz),
         id(conn.getUniqueId()),
-        curReadPos(0),
+        curReadPos(Connector::startPos()),
         db(db),
         ig(ig)
 {

@@ -1,4 +1,4 @@
-/*****************************************************************************************[Main.cc]
+/*****************************************************************************************
 CTSat -- Copyright (c) 2020, Marc Hartung
                         Zuse Institute Berlin, Germany
 
@@ -41,7 +41,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "core/SolveMode.h"
 #include "core/Statistic.h"
 
-namespace CTSat
+namespace ctsat
 {
 
 class GlucoseLuby
@@ -52,12 +52,11 @@ class GlucoseLuby
 
    void notifyRestart();
    void notifyConflictFound();
-   void notifyConflictResolved(int const lbd);
+   void clauseLearnt(int const lbd);
    bool shouldRestart();
 
  private:
    bool isLuby;
-   bool cached;
    int nConflictsToRestart;
    int curr_restarts;
    int restart_first;
@@ -89,7 +88,6 @@ class GlucoseLuby
 
 inline GlucoseLuby::GlucoseLuby(const SolverConfig& config, SolveMode& smode, Statistic& stat)
       : isLuby(smode.branchingLrb),
-        cached(false),
         nConflictsToRestart(0),
         curr_restarts(0),
         restart_first(config.restart_first),
@@ -110,17 +108,15 @@ inline void GlucoseLuby::notifyRestart()
       ++curr_restarts;
    } else
    {
-      cached = false;
       lbd_queue.clear();
    }
 
 }
 
-inline void GlucoseLuby::notifyConflictResolved(const int lbd)
+inline void GlucoseLuby::clauseLearnt(const int lbd)
 {
    if (!isLuby)
    {
-      cached = false;
       ++conflicts_VSIDS;
       lbd_queue.push(lbd);
       stat.global_lbd_sum += (lbd > 50 ? 50 : lbd);
@@ -138,10 +134,9 @@ inline bool GlucoseLuby::shouldRestart()
    bool restart = false;
    if (isLuby)
       restart = nConflictsToRestart <= 0;
-   else if (!cached)
+   else
    {
       restart = lbd_queue.full() && (lbd_queue.avg() * 0.8 > stat.global_lbd_sum / conflicts_VSIDS);
-      cached = true;
    }
    return restart;
 }

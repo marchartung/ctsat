@@ -1,4 +1,4 @@
-/*****************************************************************************************[Main.cc]
+/*****************************************************************************************
 CTSat -- Copyright (c) 2020, Marc Hartung
                         Zuse Institute Berlin, Germany
 
@@ -39,8 +39,27 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <cstdint>
 #include <string>
 
-namespace CTSat
+namespace ctsat
 {
+
+enum class AnalyzeHeuristic
+{
+   FUIP,
+   MUIP,
+   LEVELAWARE
+};
+
+
+inline AnalyzeHeuristic getAnalyze()
+{
+   std::string str(Inputs::analyze);
+   if (str == "muip")
+      return AnalyzeHeuristic::MUIP;
+   else if (str == "laa")
+      return AnalyzeHeuristic::LEVELAWARE;
+   return AnalyzeHeuristic::FUIP;
+}
+
 enum class BranchHeuristic
 {
    DIST,
@@ -102,7 +121,6 @@ inline RestartHeuristic getRestart()
 enum class ExchangeHeuristic
 {
    NOEXCHANGE,
-   SIMPLE,
    IMPORTBUFFER
 };
 
@@ -111,12 +129,10 @@ inline ExchangeHeuristic getExchange()
    std::string str(Inputs::exchange);
    if (str == "none")
       return ExchangeHeuristic::NOEXCHANGE;
-   else if (str == "simple")
-      return ExchangeHeuristic::SIMPLE;
    else if (str == "onewatched")
    {
-      assert(false);
-      return ExchangeHeuristic::SIMPLE;
+      assert(false && "not implemented yet");
+      return ExchangeHeuristic::IMPORTBUFFER;
    } else if (str == "importbuff")
       return ExchangeHeuristic::IMPORTBUFFER;
    assert(false);  // FIXME throw proper exception
@@ -165,6 +181,14 @@ class SolverConfig
    ExchangeHeuristic exchange;
    DatabaseImplementation database;
    PropagateStyle propagateStyle;
+   AnalyzeHeuristic analyze;
+
+   // Analyze
+   // LAA:
+   bool LAA_alwaySwap;
+   int LAA_levelDiffEnforce;
+   int LAA_numInitialConflicts;
+   int LAA_levelQueueSz;
 
    // Reduce
    // glucose
@@ -201,8 +225,11 @@ class SolverConfig
 
    // Minimization
    bool eliminate;
+   bool useVivification;
    bool remove_satisfied;
    int ccmin_mode;
+   int maxEntendedBinaryResolutionSz;
+   int maxFullImplicationMinLbd;
    double learntsize_factor;
    double learntsize_inc;
    int incSimplify;
@@ -227,7 +254,9 @@ class SolverConfig
    uint64_t propagation_budget;
 
    // Parallel
+   bool pinSolver;
    bool minimize_import_cl;
+   bool onlyExportWhenMin;
    int nThreads;
    int max_export_lbd;
    int max_export_sz;
@@ -289,6 +318,12 @@ class SolverConfig
            exchange(getExchange()),
            database(getDatabase()),
            propagateStyle(getPropagate()),
+           analyze(getAnalyze()),
+
+           LAA_alwaySwap(Inputs::LAA_alwaySwap),
+           LAA_levelDiffEnforce(Inputs::LAA_levelDiffEnforce),
+           LAA_numInitialConflicts(Inputs::LAA_numInitialConflicts),
+           LAA_levelQueueSz(Inputs::LAA_levelQueueSz),
 
            firstReduceDB(Inputs::first_reduce_db),
            incReduceDB(Inputs::inc_reduce_db),
@@ -316,9 +351,13 @@ class SolverConfig
            restart_inc(Inputs::restart_inc),
            chrono(Inputs::chrono),
            confl_to_chrono(Inputs::conf_to_chrono),
+
            eliminate(true),
+           useVivification(Inputs::useVivification),
            remove_satisfied(true),
            ccmin_mode(Inputs::ccmin_mode),
+           maxEntendedBinaryResolutionSz(Inputs::maxEntendedBinaryResolutionSz),
+           maxFullImplicationMinLbd(Inputs::maxFullImplicationMinLbd),
            learntsize_factor(1.0 / 3.0),
            learntsize_inc(1.1),
            incSimplify(1000),
@@ -337,7 +376,9 @@ class SolverConfig
            verbosity(Inputs::verb),
            conflict_budget(Inputs::conflict_budget),
            propagation_budget(Inputs::propagation_budget),
+           pinSolver(Inputs::pinSolver),
            minimize_import_cl(Inputs::minimize_import_cl),
+           onlyExportWhenMin(Inputs::onlyExportWhenMin),
            nThreads(Inputs::nThreads),
            max_export_lbd(Inputs::max_export_lbd),
            max_export_sz(Inputs::max_export_sz),

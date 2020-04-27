@@ -1,36 +1,36 @@
-/*****************************************************************************************[Main.cc]
-CTSat -- Copyright (c) 2020, Marc Hartung
-                        Zuse Institute Berlin, Germany
+/*****************************************************************************************
+ CTSat -- Copyright (c) 2020, Marc Hartung
+ Zuse Institute Berlin, Germany
 
-Maple_LCM_Dist_Chrono -- Copyright (c) 2018, Vadim Ryvchin, Alexander Nadel
+ Maple_LCM_Dist_Chrono -- Copyright (c) 2018, Vadim Ryvchin, Alexander Nadel
 
-GlucoseNbSAT -- Copyright (c) 2016,Chu Min LI,Mao Luo and Fan Xiao
-                           Huazhong University of science and technology, China
-                           MIS, Univ. Picardie Jules Verne, France
+ GlucoseNbSAT -- Copyright (c) 2016,Chu Min LI,Mao Luo and Fan Xiao
+ Huazhong University of science and technology, China
+ MIS, Univ. Picardie Jules Verne, France
 
-MapleSAT -- Copyright (c) 2016, Jia Hui Liang, Vijay Ganesh
+ MapleSAT -- Copyright (c) 2016, Jia Hui Liang, Vijay Ganesh
 
-MiniSat -- Copyright (c) 2003-2006, Niklas Een, Niklas Sorensson
-           Copyright (c) 2007-2010  Niklas Sorensson
+ MiniSat -- Copyright (c) 2003-2006, Niklas Een, Niklas Sorensson
+ Copyright (c) 2007-2010  Niklas Sorensson
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the
-"Software"), to deal in the Software without restriction, including
-without limitation the rights to use, copy, modify, merge, publish,
-distribute, sublicense, and/or sell copies of the Software, and to
-permit persons to whom the Software is furnished to do so, subject to
-the following conditions:
+ Permission is hereby granted, free of charge, to any person obtaining a
+ copy of this software and associated documentation files (the
+ "Software"), to deal in the Software without restriction, including
+ without limitation the rights to use, copy, modify, merge, publish,
+ distribute, sublicense, and/or sell copies of the Software, and to
+ permit persons to whom the Software is furnished to do so, subject to
+ the following conditions:
 
-The above copyright notice and this permission notice shall be included
-in all copies or substantial portions of the Software.
+ The above copyright notice and this permission notice shall be included
+ in all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+ OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+ LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  **************************************************************************************************/
 
 #ifndef SOURCES_PARALLEL_CONFLICTEXCHANGER_H_
@@ -42,7 +42,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "initial/SolverConfig.h"
 #include "mtl/Vec.h"
 
-namespace CTSat
+namespace ctsat
 {
 
 /**
@@ -78,12 +78,16 @@ class ConflictExchange : public SimpleClauseExchanger<Database, Connector, PropE
    void clauseUsedInConflict(CRef const ref);
    void clauseLearnt(CRef const ref);
 
+   void conflictFound();
+
    bool hasImportClauses() const;
    std::tuple<bool, CRef> getImportClause();
    void fetchClauses();
    void relocAll(Database& to);
 
  protected:
+   bool allowNonChronoTrail;
+   bool onlyExportWhenMin;
    int minAttachLevel;
    int survivedFetchClauses;
    uint64_t numConflictsTillDelete;
@@ -113,6 +117,8 @@ inline ConflictExchange<Database, Connector, PropEngine>::ConflictExchange(
                                                                            Connector& conn,
                                                                            PropEngine& propEngine)
       : Super(config, stat, db, ig, conn, propEngine),
+        allowNonChronoTrail(config.chrono > -1),
+        onlyExportWhenMin(config.onlyExportWhenMin),
         minAttachLevel(Super::ig.nVars()),
         survivedFetchClauses(0),
         numConflictsTillDelete(config.numConflictsToDelete),
@@ -140,13 +146,14 @@ inline void ConflictExchange<Database, Connector, PropEngine>::clauseUsedInConfl
             c.set_lbd(Super::ig.computeLBD(c));
             conflClauses.push(ref);
             ++Super::stat.nPromoted;
+            --Super::stat.nHoldBackImported;
          }
          c.setExport(1);
       } else
       {
          if (c.getExport() == 2)
             c.setExport(1);
-         else if (c.getExport() == 1
+         else if ((!onlyExportWhenMin || c.simplified() ) && c.getExport() == 1
             && c.size() <= Super::max_export_sz
             && c.lbd() <= Super::max_export_lbd)
             exportClause(c);
@@ -155,24 +162,25 @@ inline void ConflictExchange<Database, Connector, PropEngine>::clauseUsedInConfl
 }
 
 template <typename Database, typename Connector, typename PropEngine>
+void ConflictExchange<Database, Connector, PropEngine>::conflictFound()
+{
+   if (Super::stat.conflicts - lastcleanUp > numConflictsTillDelete / 2)
+      cleanNonConflictClauses();
+   if (Super::stat.conflicts - lastFetch > 100
+      || (survivedFetchClauses > 50 && Super::ig.decisionLevel() <= minAttachLevel))
+      fetchClauses();
+}
+
+template <typename Database, typename Connector, typename PropEngine>
 inline void ConflictExchange<Database, Connector, PropEngine>::clauseLearnt(CRef const ref)
 {
    Clause & c = Super::db[ref];
-   if (c.lbd() < 3)
+   if (!onlyExportWhenMin && c.lbd() < 3 && c.size() <= Super::max_export_sz)
       exportClause(c);
    else
    {
       c.setExport(2);  // marker for conflict usage
       c.touched() = Super::stat.conflicts;
-   }
-   if ((Super::stat.conflicts & 4) == 4)  // optimization to prevent heavy polling
-   {
-      if (Super::stat.conflicts - lastcleanUp > numConflictsTillDelete / 2)
-         cleanNonConflictClauses();
-      if (Super::stat.conflicts - lastFetch > 100
-         || Super::conn.shouldImport(Super::curReadPos)
-         || (survivedFetchClauses > 50 && Super::ig.decisionLevel() <= minAttachLevel))
-         fetchClauses();
    }
 }
 
@@ -236,9 +244,8 @@ inline void ConflictExchange<Database, Connector, PropEngine>::relocAll(Database
       Super::db.reloc(nonConflClauses[i], to);
 }
 
-
 template <typename Database, typename Connector, typename PropEngine>
-inline void CTSat::ConflictExchange<Database, Connector, PropEngine>::cleanNonConflictClauses()
+inline void ctsat::ConflictExchange<Database, Connector, PropEngine>::cleanNonConflictClauses()
 {
    const uint32_t nConfl = Super::stat.conflicts;
    int i = 0, j = 0;
@@ -250,18 +257,17 @@ inline void CTSat::ConflictExchange<Database, Connector, PropEngine>::cleanNonCo
          uint32_t const age = nConfl - c.touched();
          if (Super::ig.locked(c)
             || age < numConflictsTillDelete
-            || (c.lbd() < 4 && age < 2 * numConflictsTillDelete))
+            || (c.lbd() < 4 && age < (5-c.lbd()) * numConflictsTillDelete))
             nonConflClauses[j++] = nonConflClauses[i];
          else
          {
-            c.mark(1);
-            Super::db.free(nonConflClauses[i]);
+            --Super::stat.nHoldBackImported;
+            Super::db.remove(nonConflClauses[i]);
             propEngine.detachClause(nonConflClauses[i]);  // no actual remove, wait for garbage collect
          }
       }
    }
 
-   Super::stat.nHoldBackImported -= i - j;
    nonConflClauses.shrink(i - j);
    lastcleanUp = Super::stat.conflicts;
 }

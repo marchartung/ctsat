@@ -1,4 +1,4 @@
-/*****************************************************************************************[Main.cc]
+/*****************************************************************************************
 CTSat -- Copyright (c) 2020, Marc Hartung
                         Zuse Institute Berlin, Germany
 
@@ -47,7 +47,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "mtl/Vec.h"
 #include "utils/ParseUtils.h"
 
-namespace CTSat {
+namespace ctsat {
 
 //==================================================================================================
 // Top-level option parse/help functions:

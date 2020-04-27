@@ -1,4 +1,4 @@
-/*****************************************************************************************[Main.cc]
+/*****************************************************************************************
 CTSat -- Copyright (c) 2020, Marc Hartung
                         Zuse Institute Berlin, Germany
 
@@ -39,7 +39,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <stdio.h>
 #include <stdlib.h>
 
-using namespace CTSat;
+using namespace ctsat;
 
 // TODO: split the memory reading functions into two: one for reading high-watermark of RSS, and
 // one for reading the current virtual memory size.
@@ -81,14 +81,14 @@ static inline int memReadPeak(void)
     return peak_kb;
 }
 
-double CTSat::memUsed() { return (double)memReadStat(0) * (double)getpagesize() / (1024*1024); }
-double CTSat::memUsedPeak() { 
-    double peak = memReadPeak() / 1024;
+double ctsat::memUsed() { return (double)memReadStat(0) * (double)getpagesize() / (1024.0*1024.0); }
+double ctsat::memUsedPeak() { 
+    double peak = static_cast<double>(memReadPeak()) / 1024.0;
     return peak == 0 ? memUsed() : peak; }
 
 #elif defined(__FreeBSD__)
 
-double CTSat::memUsed(void) {
+double ctsat::memUsed(void) {
     struct rusage ru;
     getrusage(RUSAGE_SELF, &ru);
     return (double)ru.ru_maxrss / 1024; }
@@ -98,12 +98,12 @@ double MiniSat::memUsedPeak(void) { return memUsed(); }
 #elif defined(__APPLE__)
 #include <malloc/malloc.h>
 
-double CTSat::memUsed(void) {
+double ctsat::memUsed(void) {
     malloc_statistics_t t;
     malloc_zone_statistics(NULL, &t);
     return (double)t.max_size_in_use / (1024*1024); }
-double CTSat::memUsedPeak(void) {return memUsed(); }
+double ctsat::memUsedPeak(void) {return memUsed(); }
 #else
-double CTSat::memUsed() { 
+double ctsat::memUsed() { 
     return 0; }
 #endif

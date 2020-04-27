@@ -1,4 +1,4 @@
-/*****************************************************************************************[Main.cc]
+/*****************************************************************************************
 CTSat -- Copyright (c) 2020, Marc Hartung
                         Zuse Institute Berlin, Germany
 
@@ -40,7 +40,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "initial/SolverConfig.h"
 #include "core/SolveMode.h"
 #include "core/Statistic.h"
-namespace CTSat
+namespace ctsat
 {
 class LubyRestart
 {
@@ -50,7 +50,7 @@ class LubyRestart
 
    void notifyRestart();
    void notifyConflictFound();
-   void notifyConflictResolved(int const lbd);
+   void clauseLearnt(int const lbd);
    bool shouldRestart();
 
  private:
@@ -95,7 +95,7 @@ inline void LubyRestart::notifyRestart()
    ++curr_restarts;
 }
 
-inline void LubyRestart::notifyConflictResolved(const int lbd)
+inline void LubyRestart::clauseLearnt(const int lbd)
 {
 
 }

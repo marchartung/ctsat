@@ -15,7 +15,7 @@
 #include "mtl/Heap.h"
 #include "utils/Random.h"
 
-namespace CTSat
+namespace ctsat
 {
 
 template <typename Database>

@@ -1,4 +1,4 @@
-/*****************************************************************************************[Main.cc]
+/*****************************************************************************************
 CTSat -- Copyright (c) 2020, Marc Hartung
                         Zuse Institute Berlin, Germany
 
@@ -45,6 +45,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "branch/Branch.h"
 #include "propagate/MiniSatPropagate.h"
 #include "initial/SatInstance.h"
+#include "initial/SolverConfig.h"
 #include "utils/DratPrint.h"
 #include "utils/Random.h"
 
@@ -54,7 +55,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "EliminatedClauseDatabase.h"
 
-namespace CTSat
+namespace ctsat
 {
 
 //=================================================================================================
@@ -66,10 +67,16 @@ class Preprocessor
    typedef ClauseAllocator::Clause Clause;
    typedef ClauseAllocator::CRef CRef;
    typedef ClauseAllocator::lbool lbool;
+
+   Preprocessor() = delete;
+   Preprocessor(Preprocessor&&) = delete;
+   Preprocessor(Preprocessor const&) = delete;
+   Preprocessor& operator=(Preprocessor&&) = delete;
+   Preprocessor& operator=(Preprocessor const &) = delete;
  public:
    // Constructor/Destructor:
    //
-   Preprocessor(SolverConfig const & config = SolverConfig::getInputConfig());
+   Preprocessor(SolverConfig const & config);
    ~Preprocessor();
 
    SatInstance getInstance(std::string const & filename);
@@ -173,6 +180,8 @@ class Preprocessor
    bool eliminate();  // Perform variable elimination based simplification.
    bool eliminate_();
 
+   bool eliminateMinimalNiver();
+
    int nVars() const
    {
       return ig.nVars();
@@ -208,7 +217,8 @@ class Preprocessor
    bool merge(const Clause& _ps, const Clause& _qs, Var v, vec<Lit>& out_clause);
    bool merge(const Clause& _ps, const Clause& _qs, Var v, int& size);
    bool backwardSubsumptionCheck(bool verbose = false);
-   bool eliminateVar(Var v);
+   bool eliminateVar(Var const v);
+   bool eliminateVarMinimal(Var const v);
 
    bool removeRedundant(bool const removeFalseLits = false);
 

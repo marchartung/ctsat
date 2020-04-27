@@ -1,4 +1,4 @@
-EXEC      = glucose_parallel
+EXEC      = ctsat_parallel
 DEPDIR    = mtl utils core initial simp
 MROOT     = ../
 

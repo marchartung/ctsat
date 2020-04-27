@@ -1,36 +1,36 @@
-/*****************************************************************************************[Main.cc]
-CTSat -- Copyright (c) 2020, Marc Hartung
-                        Zuse Institute Berlin, Germany
+/*****************************************************************************************
+ CTSat -- Copyright (c) 2020, Marc Hartung
+ Zuse Institute Berlin, Germany
 
-Maple_LCM_Dist_Chrono -- Copyright (c) 2018, Vadim Ryvchin, Alexander Nadel
+ Maple_LCM_Dist_Chrono -- Copyright (c) 2018, Vadim Ryvchin, Alexander Nadel
 
-GlucoseNbSAT -- Copyright (c) 2016,Chu Min LI,Mao Luo and Fan Xiao
-                           Huazhong University of science and technology, China
-                           MIS, Univ. Picardie Jules Verne, France
+ GlucoseNbSAT -- Copyright (c) 2016,Chu Min LI,Mao Luo and Fan Xiao
+ Huazhong University of science and technology, China
+ MIS, Univ. Picardie Jules Verne, France
 
-MapleSAT -- Copyright (c) 2016, Jia Hui Liang, Vijay Ganesh
+ MapleSAT -- Copyright (c) 2016, Jia Hui Liang, Vijay Ganesh
 
-MiniSat -- Copyright (c) 2003-2006, Niklas Een, Niklas Sorensson
-           Copyright (c) 2007-2010  Niklas Sorensson
+ MiniSat -- Copyright (c) 2003-2006, Niklas Een, Niklas Sorensson
+ Copyright (c) 2007-2010  Niklas Sorensson
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the
-"Software"), to deal in the Software without restriction, including
-without limitation the rights to use, copy, modify, merge, publish,
-distribute, sublicense, and/or sell copies of the Software, and to
-permit persons to whom the Software is furnished to do so, subject to
-the following conditions:
+ Permission is hereby granted, free of charge, to any person obtaining a
+ copy of this software and associated documentation files (the
+ "Software"), to deal in the Software without restriction, including
+ without limitation the rights to use, copy, modify, merge, publish,
+ distribute, sublicense, and/or sell copies of the Software, and to
+ permit persons to whom the Software is furnished to do so, subject to
+ the following conditions:
 
-The above copyright notice and this permission notice shall be included
-in all copies or substantial portions of the Software.
+ The above copyright notice and this permission notice shall be included
+ in all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+ OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+ LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  **************************************************************************************************/
 
 #ifndef SOURCES_DATABASE_MINISATALLOCATORDB_H_
@@ -41,7 +41,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "mtl/Alloc.h"
 #include "mtl/Alg.h"
 
-namespace CTSat
+namespace ctsat
 {
 
 //=================================================================================================
@@ -172,7 +172,6 @@ class Clause
       return header.exportMark;
    }
 
-
    const Lit& last() const;
 
    bool reloced() const;
@@ -217,7 +216,7 @@ class Clause
    // simplify
    //
    void setSimplified(bool b);
-   bool simplified();
+   bool simplified() const;
 };
 
 inline int Clause::size() const
@@ -338,7 +337,7 @@ inline void Clause::setSimplified(bool b)
 {
    header.simplified = b;
 }
-inline bool Clause::simplified()
+inline bool Clause::simplified() const
 {
    return header.simplified;
 }
@@ -357,11 +356,11 @@ class ClauseAllocator : public RegionAllocator<uint32_t>
    typedef uint32_t base_type;
    bool extra_clause_field;
 
-   typedef CTSat::Lit Lit;
-   typedef CTSat::CRef CRef;
-   typedef CTSat::Var Var;
-   typedef CTSat::lbool lbool;
-   typedef CTSat::Clause Clause;
+   typedef ctsat::Lit Lit;
+   typedef ctsat::CRef CRef;
+   typedef ctsat::Var Var;
+   typedef ctsat::lbool lbool;
+   typedef ctsat::Clause Clause;
 
    inline static CRef npos()
    {
@@ -418,6 +417,10 @@ class ClauseAllocator : public RegionAllocator<uint32_t>
       to.extra_clause_field = extra_clause_field;
       RegionAllocator<uint32_t>::moveTo(to);
    }
+   void clear(bool const dealloc)
+   {
+      RegionAllocator<uint32_t>::clear(dealloc);
+   }
 
    template <class Lits>
    CRef alloc(const Lits& ps, bool learnt)
@@ -449,19 +452,19 @@ class ClauseAllocator : public RegionAllocator<uint32_t>
    }
 
    // Deref, Load Effective Address (LEA), Inverse of LEA (AEL):
-   inline Clause& operator[](Ref r)
+   inline Clause& operator[](Ref const r)
    {
       return (Clause&) RegionAllocator<uint32_t>::operator[](r);
    }
-   inline const Clause& operator[](Ref r) const
+   inline const Clause& operator[](Ref const r) const
    {
       return (Clause&) RegionAllocator<uint32_t>::operator[](r);
    }
-   Clause* lea(Ref r)
+   Clause* lea(Ref const r)
    {
       return (Clause*) RegionAllocator<uint32_t>::lea(r);
    }
-   const Clause* lea(Ref r) const
+   const Clause* lea(Ref const r) const
    {
       return (Clause*) RegionAllocator<uint32_t>::lea(r);
    }
@@ -470,12 +473,27 @@ class ClauseAllocator : public RegionAllocator<uint32_t>
       return RegionAllocator<uint32_t>::ael((uint32_t*) t);
    }
 
+   bool remove(CRef const cr)
+   {
+      Clause& c = operator[](cr);
+      if (c.mark() != 1)
+      {
+         c.mark(1);
+         free(cr);
+         return true;
+      } else
+         return false;
+   }
+
+ private:
+
    void free(CRef cid)
    {
       Clause& c = operator[](cid);
       int extras = c.learnt() ? 2 : (int) c.has_extra();
       RegionAllocator<uint32_t>::free(clauseWord32Size(c.size(), extras));
    }
+ public:
 
    void reloc(CRef& cr, ClauseAllocator& to)
    {
@@ -520,8 +538,7 @@ inline Lit Clause::subsumes(const Clause& other) const
    assert(!other.learnt());
    assert(has_extra());
    assert(other.has_extra());
-   if (other.size() < size()
-      || (abs() & ~other.abs()) != 0)
+   if (other.size() < size() || (abs() & ~other.abs()) != 0)
       return Lit::Error();
 
    Lit ret = Lit::Undef();

@@ -1,4 +1,4 @@
-/*****************************************************************************************[Main.cc]
+/*****************************************************************************************
 CTSat -- Copyright (c) 2020, Marc Hartung
                         Zuse Institute Berlin, Germany
 
@@ -35,7 +35,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "initial/SatInstance.h"
 
-namespace CTSat
+namespace ctsat
 {
 
 SatInstance::SatInstance()
@@ -68,17 +68,24 @@ SatInstance::SatInstance(void const * data, uint64_t const nBytes)
    // read in clauses from stream, catch max var, collect clause refs, set model to highest var
    Var maxVar = 0;
    CRef pos = 0;
+   model.growTo(1,lbool::True()); // we just set everthing to true, later this values won't be used
    while (pos != Database::npos())
    {
       clauses.push(pos);
       Clause const & c = ca[pos];
       assert(!c.learnt());
       for (int i = 0; i < c.size(); ++i)
-         if (c[i].var() > maxVar)
-            maxVar = c[i].var();
+      {
+         Var const v = c[i].var();
+         if (v > maxVar)
+         {
+            maxVar = v;
+            model.growTo(v + 1, lbool::True());
+         }
+         model[v] = lbool::Undef();
+      }
       pos = ca.next(pos);
    }
-   model.growTo(maxVar + 1, lbool::Undef());
 }
 
 SatInstance& SatInstance::operator =(SatInstance&& in)

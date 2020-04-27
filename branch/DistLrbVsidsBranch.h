@@ -19,7 +19,7 @@
 #include "branch/Branch.h"
 
 #define ANTI_EXPLORATION
-namespace CTSat
+namespace ctsat
 {
 
 template <typename Database>
@@ -301,7 +301,6 @@ inline bool DistLrbVsidsBranch<Database>::collectFirstUIP(CRef confl)
          //    varBumpActivity(v);
       }
    }
-
    int limit = ig.levelEnd(minLevel - 1);
    for (int i = ig.nAssigns() - 1; i >= limit; i--)
    {
@@ -310,11 +309,10 @@ inline bool DistLrbVsidsBranch<Database>::collectFirstUIP(CRef confl)
       if (ig.isSeen(v))
       {
          int const currentDecLevel = ig.level(v);
-         //      if (currentDecLevel==decisionLevel())
-         //       varBumpActivity(v);
          ig.unsetSeen(v);
          if (--pathCs[currentDecLevel] != 0)
          {
+            assert(ig.reason(v) != Database::npos());
             Clause& rc = ca[ig.reason(v)];
             int reasonVarLevel = var_iLevel_tmp[v] + 1;
             if (reasonVarLevel > max_level)
@@ -346,7 +344,6 @@ inline bool DistLrbVsidsBranch<Database>::collectFirstUIP(CRef confl)
                   } else
                   {
                      var_iLevel_tmp[v1] = reasonVarLevel;
-                     //   varBumpActivity(v1);
                      ig.setSeen(v1);
                      pathCs[ig.level(v1)]++;
                   }

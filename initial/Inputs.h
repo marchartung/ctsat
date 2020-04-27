@@ -1,4 +1,4 @@
-/*****************************************************************************************[Main.cc]
+/*****************************************************************************************
 CTSat -- Copyright (c) 2020, Marc Hartung
                         Zuse Institute Berlin, Germany
 
@@ -37,7 +37,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "utils/Options.h"
 
-namespace CTSat
+namespace ctsat
 {
 class Inputs
 {
@@ -50,6 +50,13 @@ class Inputs
    static StringOption restart;
    static StringOption exchange;
    static StringOption propagate;
+   static StringOption analyze;
+
+   static BoolOption LAA_alwaySwap;
+   static IntOption LAA_levelDiffEnforce;
+   static IntOption LAA_numInitialConflicts;
+   static IntOption LAA_levelQueueSz;
+
 
    static DoubleOption step_size;
    static DoubleOption step_size_dec;
@@ -58,6 +65,8 @@ class Inputs
    static DoubleOption clause_decay;
    static DoubleOption random_seed;
    static IntOption ccmin_mode;
+   static IntOption maxEntendedBinaryResolutionSz;
+   static IntOption maxFullImplicationMinLbd;
    static IntOption phase_saving;
    static BoolOption rnd_init_act;
    static BoolOption rnd_polarity;
@@ -75,6 +84,7 @@ class Inputs
    static IntOption spec_inc_reduce_db;
    static IntOption maxProtectableLbd;
 
+   static BoolOption useVivification;
    static BoolOption use_elim;
    static IntOption grow;
    static IntOption clause_lim;
@@ -83,7 +93,6 @@ class Inputs
 
    static IntOption verb;
    static DoubleOption print_interval;
-   static BoolOption pre;
    static IntOption cpu_lim;
    static IntOption mem_lim;
 
@@ -92,6 +101,7 @@ class Inputs
    static BoolOption drup;
    static StringOption drup_file;
 
+   static BoolOption onlyExportWhenMin;
    static BoolOption minimize_import_cl;
    static IntOption nThreads;
    static IntOption max_export_lbd;
@@ -102,6 +112,12 @@ class Inputs
 
    static DoubleOption mpiMbBufferSize;
    static DoubleOption mpi_send_interval;
+   static IntOption nMpiPartitions;
+   static BoolOption mpiAutoThreads;
+   static BoolOption pinSolver;
+   static BoolOption log;
+   static BoolOption mpiHashClauseFilter;
+   static StringOption logDirectory;
 
    static int * argc;
    static char *** argv;

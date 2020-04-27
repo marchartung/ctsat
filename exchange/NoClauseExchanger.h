@@ -1,4 +1,4 @@
-/*****************************************************************************************[Main.cc]
+/*****************************************************************************************
 CTSat -- Copyright (c) 2020, Marc Hartung
                         Zuse Institute Berlin, Germany
 
@@ -43,7 +43,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "mtl/Vec.h"
 #include "database/BasicTypes.h"
 
-namespace CTSat
+namespace ctsat
 {
 template <typename Database, typename Connector, typename PropEngine>
 class NoClauseExchanger
@@ -74,6 +74,11 @@ class NoClauseExchanger
    void clauseLearnt(CRef const ref);
    void clauseImproved(CRef const ref);
    void unitLearnt(Lit const l);
+
+   void conflictFound()
+   {
+
+   }
 
    bool hasImportClauses() const;
    std::tuple<bool,CRef> getImportClause();
@@ -146,7 +151,7 @@ template <typename Database, typename Connector, typename PropEngine>
 inline bool NoClauseExchanger<Database, Connector, PropEngine>::setFinished(lbool const res)
 {
    assert(!res.isUndef());
-   CTSat::lbool r = (res.isTrue()) ? CTSat::lbool::True() : CTSat::lbool::False();
+   ctsat::lbool r = (res.isTrue()) ? ctsat::lbool::True() : ctsat::lbool::False();
    return conn.setFinished(r);
 }
 template <typename Database, typename Connector, typename PropEngine>

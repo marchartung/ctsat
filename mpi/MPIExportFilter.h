@@ -1,4 +1,4 @@
-/*****************************************************************************************[Main.cc]
+/*****************************************************************************************
 CTSat -- Copyright (c) 2020, Marc Hartung
                         Zuse Institute Berlin, Germany
 
@@ -39,9 +39,10 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "mpi/MPIBroadcastConnector.h"
 #include "exchange/SimpleClauseExchanger.h"
 #include "parallel/AtomicConnector.h"
+#include "mpi/HashFilter.h"
 #include "mtl/Alloc.h"
 
-namespace CTSat
+namespace ctsat
 {
 template <typename Database>
 class MPIExportFilter
@@ -52,7 +53,7 @@ class MPIExportFilter
    typedef typename Database::Ref Ref;
  public:
 
-   MPIExportFilter(MPIBroadcastConnector & conn);
+   MPIExportFilter(MPIBroadcastConnector & conn, bool const useHashes = true);
 
    void readRecvClauses();
    void updateLocalClauses();
@@ -60,6 +61,8 @@ class MPIExportFilter
 
    void printState() const;
  private:
+   bool const useHashes;
+   HashFilter hFilter;
    MPICommunicationStat statistic;
    Allocator db;
    vec<vec<Ref>> lbdRefs;
@@ -92,10 +95,11 @@ class MPIExportFilter
 };
 
 template <typename Database>
-inline MPIExportFilter<Database>::MPIExportFilter(MPIBroadcastConnector& conn)
-      : statistic(conn.getNumRanks(), conn.getSendBufferSize()),
+inline MPIExportFilter<Database>::MPIExportFilter(MPIBroadcastConnector& conn, bool const useHashes)
+      : useHashes(useHashes),
+        statistic(conn.getSendBufferSize()),
         db(1024),
-        readPos(0),
+        readPos(conn.startPos()),
         conn(conn),
         importExchange(conn.getMPIExchangeBuffer()),
         exportExchange(conn.getLocalExchangeBuffer())
@@ -105,27 +109,35 @@ inline MPIExportFilter<Database>::MPIExportFilter(MPIBroadcastConnector& conn)
 template <typename Database>
 inline void MPIExportFilter<Database>::readRecvClauses()
 {
-   for (int i = 0; i < conn.getNumRanks(); ++i)
+   hFilter.increaseAge();
+   int const rank = conn.getRank(), nRanks = conn.getNumRanks();
+   for (int i = 0; i < nRanks; ++i)
    {
-      if (i == conn.getRank())
+      if (i == rank)
          continue;
       uint64_t sumBytes = 0, nCl = 0, sumLbd = 0;
       uint8_t const * p = conn.getRecvBuffer(i);
       while (*reinterpret_cast<base_type const*>(p) != std::numeric_limits<base_type>::max())
       {
          EClause const & e = *reinterpret_cast<EClause const*>(p);
-         sumLbd += e.lbd;
-         assert(e.size() <= 30 || e.lbd < 3);
          uint64_t const nBytes = EClause::nbytes(e);
          assert(nBytes % sizeof(base_type) == 0);
-         importExchange.allocConstruct<EClause, EClause const &>(nBytes, e);
          p += nBytes;
+         if(useHashes && hFilter.add(e))
+         {
+            ++statistic.hashFiltered;
+            continue;
+         }
+         sumLbd += e.lbd;
+         assert(e.size() <= 30 || e.lbd < 3);
+         importExchange.allocConstruct<EClause, EClause const &>(nBytes, e);
          sumBytes += nBytes;
          ++nCl;
       }
       statistic.addComm(false, sumBytes, nCl, sumLbd);
    }
-
+   if(statistic.numRounds % 5000 == 0)
+      hFilter.cleanUp(2500);
 }
 
 template <typename Database>

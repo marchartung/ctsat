@@ -1,4 +1,4 @@
-/*****************************************************************************************[Main.cc]
+/*****************************************************************************************
 CTSat -- Copyright (c) 2020, Marc Hartung
                         Zuse Institute Berlin, Germany
 
@@ -35,7 +35,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "core/ModelChecker.h"
 
-namespace CTSat
+namespace ctsat
 {
 bool ModelChecker::checkSat(vec<lbool> const & model, std::string const filename)
 {

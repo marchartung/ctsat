@@ -1,4 +1,4 @@
-/*****************************************************************************************[Main.cc]
+/*****************************************************************************************
 CTSat -- Copyright (c) 2020, Marc Hartung
                         Zuse Institute Berlin, Germany
 
@@ -36,7 +36,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifndef SOURCES_CORE_SOLVEMODE_H_
 #define SOURCES_CORE_SOLVEMODE_H_
 
-namespace CTSat
+namespace ctsat
 {
 /*
  * This class is used to communicate between different heuristics. Remedies template dependencies.

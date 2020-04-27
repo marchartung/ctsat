@@ -1,4 +1,4 @@
-/*****************************************************************************************[Main.cc]
+/*****************************************************************************************
 CTSat -- Copyright (c) 2020, Marc Hartung
                         Zuse Institute Berlin, Germany
 
@@ -37,9 +37,9 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "utils/Options.h"
 #include "utils/ParseUtils.h"
 
-using namespace CTSat;
+using namespace ctsat;
 
-void CTSat::parseOptions(int& argc, char** argv, bool strict)
+void ctsat::parseOptions(int& argc, char** argv, bool strict)
 {
     int i, j;
     for (i = j = 1; i < argc; i++){
@@ -70,9 +70,9 @@ void CTSat::parseOptions(int& argc, char** argv, bool strict)
 }
 
 
-void CTSat::setUsageHelp      (const char* str){ Option::getUsageString() = str; }
-void CTSat::setHelpPrefixStr  (const char* str){ Option::getHelpPrefixString() = str; }
-void CTSat::printUsageAndExit (int argc, char** argv, bool verbose)
+void ctsat::setUsageHelp      (const char* str){ Option::getUsageString() = str; }
+void ctsat::setHelpPrefixStr  (const char* str){ Option::getHelpPrefixString() = str; }
+void ctsat::printUsageAndExit (int argc, char** argv, bool verbose)
 {
     const char* usage = Option::getUsageString();
     if (usage != NULL)

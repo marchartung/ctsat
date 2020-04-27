@@ -20,8 +20,8 @@ SACOBJS     = $(addsuffix sa,  $(COBJS))
 
 
 CXX       ?= g++
-CFLAGS    ?= -Wall -Wno-parentheses -std=c++11
-LFLAGS    ?= -Wall
+CFLAGS    += -Wall -Wno-parentheses -std=c++11
+LFLAGS    += -Wall
 
 COPTIMIZE ?= -O3
 

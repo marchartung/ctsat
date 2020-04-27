@@ -1,4 +1,4 @@
-/*****************************************************************************************[Main.cc]
+/*****************************************************************************************
 CTSat -- Copyright (c) 2020, Marc Hartung
                         Zuse Institute Berlin, Germany
 
@@ -44,7 +44,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "mtl/XAlloc.h"
 
-namespace CTSat
+namespace ctsat
 {
 
 //=================================================================================================
@@ -124,6 +124,16 @@ class vec
       return data;
    }
 
+   T const * getData() const
+   {
+      return data;
+   }
+
+   T * getData()
+   {
+      return data;
+   }
+
    // Size operations:
    int size(void) const
    {
@@ -163,6 +173,15 @@ class vec
          capacity(sz + 1);
       data[sz++] = elem;
    }
+
+   void push(vec<T> const & v)
+   {
+      if(sz+v.size() >= cap)
+         capacity(sz+v.size()+1);
+      for(int i=0;i<v.size();++i)
+         push_(v[i]);
+   }
+
    void push_(const T& elem)
    {
       assert(sz < cap);

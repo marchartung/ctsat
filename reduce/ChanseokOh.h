@@ -1,36 +1,36 @@
-/*****************************************************************************************[Main.cc]
-CTSat -- Copyright (c) 2020, Marc Hartung
-                        Zuse Institute Berlin, Germany
+/*****************************************************************************************
+ CTSat -- Copyright (c) 2020, Marc Hartung
+ Zuse Institute Berlin, Germany
 
-Maple_LCM_Dist_Chrono -- Copyright (c) 2018, Vadim Ryvchin, Alexander Nadel
+ Maple_LCM_Dist_Chrono -- Copyright (c) 2018, Vadim Ryvchin, Alexander Nadel
 
-GlucoseNbSAT -- Copyright (c) 2016,Chu Min LI,Mao Luo and Fan Xiao
-                           Huazhong University of science and technology, China
-                           MIS, Univ. Picardie Jules Verne, France
+ GlucoseNbSAT -- Copyright (c) 2016,Chu Min LI,Mao Luo and Fan Xiao
+ Huazhong University of science and technology, China
+ MIS, Univ. Picardie Jules Verne, France
 
-MapleSAT -- Copyright (c) 2016, Jia Hui Liang, Vijay Ganesh
+ MapleSAT -- Copyright (c) 2016, Jia Hui Liang, Vijay Ganesh
 
-MiniSat -- Copyright (c) 2003-2006, Niklas Een, Niklas Sorensson
-           Copyright (c) 2007-2010  Niklas Sorensson
+ MiniSat -- Copyright (c) 2003-2006, Niklas Een, Niklas Sorensson
+ Copyright (c) 2007-2010  Niklas Sorensson
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the
-"Software"), to deal in the Software without restriction, including
-without limitation the rights to use, copy, modify, merge, publish,
-distribute, sublicense, and/or sell copies of the Software, and to
-permit persons to whom the Software is furnished to do so, subject to
-the following conditions:
+ Permission is hereby granted, free of charge, to any person obtaining a
+ copy of this software and associated documentation files (the
+ "Software"), to deal in the Software without restriction, including
+ without limitation the rights to use, copy, modify, merge, publish,
+ distribute, sublicense, and/or sell copies of the Software, and to
+ permit persons to whom the Software is furnished to do so, subject to
+ the following conditions:
 
-The above copyright notice and this permission notice shall be included
-in all copies or substantial portions of the Software.
+ The above copyright notice and this permission notice shall be included
+ in all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+ OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+ LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  **************************************************************************************************/
 
 #ifndef SOURCES_REDUCE_CHANSEOKOH_H_
@@ -40,9 +40,8 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "initial/SolverConfig.h"
 #include "core/ImplicationGraph.h"
 
-namespace CTSat
+namespace ctsat
 {
-
 
 template <typename Database>
 class ChanseokOhReduce
@@ -53,54 +52,21 @@ class ChanseokOhReduce
 
  public:
    ChanseokOhReduce(
-              SolverConfig const & config,
-              Statistic & stat,
-              Database & db,
-              ImplicationGraph<Database> & ig);
+                    SolverConfig const & config,
+                    Statistic & stat,
+                    Database & db,
+                    ImplicationGraph<Database> & ig);
 
    // returns true, if clauses were deleted
    template <typename RemoveFunctor>
-   bool run(RemoveFunctor const & remove)
-   {
-      bool res = false;
-      if (stat.conflicts >= next_T2_reduce)
-      {
-         next_T2_reduce = stat.conflicts + 10000;
-         reduceDB_Tier2();
-      }
-      if (stat.conflicts >= next_L_reduce)
-      {
-         next_L_reduce = stat.conflicts + 15000;
-         reduceDB(remove);
-         res = true;
-      }
-      return res;
-   }
+   bool run(RemoveFunctor const & remove);
 
    template <typename RemoveFunctor>
-   void removeSatisfied(RemoveFunctor const & remove)
-   {
-      safeRemoveSatisfied(remove, learnts_core, CORE);  // Should clean core first.
-      safeRemoveSatisfied(remove, learnts_tier2, TIER2);
-      safeRemoveSatisfied(remove, learnts_local, LOCAL);
-   }
+   void removeSatisfied(RemoveFunctor const & remove);
 
    // applies the given functor to each clause. When the functor returns true, the clause will be removed
    template <typename ApplyFunctor>
-   void applyRemoveGoodClauses(ApplyFunctor const & func)
-   {
-      int i = 0, j = 0;
-      for (; i < learnts_core.size(); ++i)
-         if (!func(learnts_core[i]))
-            learnts_core[j++] = learnts_core[i];
-      learnts_core.shrink(i - j);
-      i = 0;
-      j = 0;
-      for (; i < learnts_tier2.size(); ++i)
-         if (!func(learnts_tier2[i]))
-            learnts_tier2[j++] = learnts_tier2[i];
-      learnts_tier2.shrink(i - j);
-   }
+   void applyRemoveGoodClauses(ApplyFunctor const & func);
 
    void addClause(CRef const ref);
 
@@ -150,76 +116,132 @@ class ChanseokOhReduce
    void claBumpActivity(Clause& c);   // Increase a clause with the current 'bump' value.
 
    template <typename RemoveFunctor>
-   void reduceDB(RemoveFunctor const & remove)   // Reduce the set of learnt clauses.
-   {
-      int i, j;
-      //if (local_learnts_dirty) cleanLearnts(learnts_local, LOCAL);
-      //local_learnts_dirty = false;
-
-      sort(learnts_local, reduceDB_lt(ca));
-
-      int limit = learnts_local.size() / 2;
-      for (i = j = 0; i < learnts_local.size(); i++)
-      {
-         Clause& c = ca[learnts_local[i]];
-         if (c.mark() == LOCAL)
-            if (c.removable() && !ig.locked(c) && i < limit)
-               remove(learnts_local[i]);
-            else
-            {
-               if (!c.removable())
-                  limit++;
-               c.removable(true);
-               learnts_local[j++] = learnts_local[i];
-            }
-      }
-      learnts_local.shrink(i - j);
-   }
-   void reduceDB_Tier2()
-   {
-      int i, j;
-      const uint32_t nConfl = stat.conflicts; // TODO long running props might have overflows
-      for (i = j = 0; i < learnts_tier2.size(); i++)
-      {
-         Clause& c = ca[learnts_tier2[i]];
-         if (c.mark() == TIER2)
-            if (!ig.locked(c) && c.touched() + 30000 < nConfl)
-            {
-               learnts_local.push(learnts_tier2[i]);
-               c.mark(LOCAL);
-               //c.removable(true);
-               c.activity() = 0;
-               claBumpActivity(c);
-            } else
-               learnts_tier2[j++] = learnts_tier2[i];
-      }
-      learnts_tier2.shrink(i - j);
-   }
+   void reduceDB(RemoveFunctor const & remove);
+   void reduceDB_Tier2();
 
    template <typename RemoveFunctor>
-   void safeRemoveSatisfied(RemoveFunctor const & remove, vec<CRef>& cs, unsigned valid_mark)
-   {
-      int i, j;
-      for (i = j = 0; i < cs.size(); i++)
-      {
-         Clause& c = ca[cs[i]];
-         if (c.mark() == valid_mark)
-            if (ig.satisfied(c))
-               remove(cs[i]);
-            else
-               cs[j++] = cs[i];
-      }
-      cs.shrink(i - j);
-   }
-
+   void safeRemoveSatisfied(RemoveFunctor const & remove, vec<CRef>& cs, unsigned valid_mark);
 };
 
 template <typename Database>
+template <typename RemoveFunctor>
+void ChanseokOhReduce<Database>::reduceDB(RemoveFunctor const & remove)   // Reduce the set of learnt clauses.
+{
+   int i, j;
+   //if (local_learnts_dirty) cleanLearnts(learnts_local, LOCAL);
+   //local_learnts_dirty = false;
+
+   sort(learnts_local, reduceDB_lt(ca));
+
+   int limit = learnts_local.size() / 2;
+   for (i = j = 0; i < learnts_local.size(); i++)
+   {
+      Clause& c = ca[learnts_local[i]];
+      if (c.mark() == LOCAL)
+         if (c.removable() && !ig.locked(c) && i < limit)
+            remove(learnts_local[i]);
+         else
+         {
+            if (!c.removable())
+               limit++;
+            c.removable(true);
+            learnts_local[j++] = learnts_local[i];
+         }
+   }
+   learnts_local.shrink(i - j);
+}
+template <typename Database>
+void ChanseokOhReduce<Database>::reduceDB_Tier2()
+{
+   int i, j;
+   const uint32_t nConfl = stat.conflicts;  // TODO long running props might have overflows
+   for (i = j = 0; i < learnts_tier2.size(); i++)
+   {
+      Clause& c = ca[learnts_tier2[i]];
+      if (c.mark() == TIER2)
+         if (!ig.locked(c) && c.touched() + 30000 < nConfl)
+         {
+            learnts_local.push(learnts_tier2[i]);
+            c.mark(LOCAL);
+            //c.removable(true);
+            c.activity() = 0;
+            claBumpActivity(c);
+         } else
+            learnts_tier2[j++] = learnts_tier2[i];
+   }
+   learnts_tier2.shrink(i - j);
+}
+
+template <typename Database>
+template <typename RemoveFunctor>
+void ChanseokOhReduce<Database>::safeRemoveSatisfied(RemoveFunctor const & remove, vec<CRef>& cs, unsigned valid_mark)
+{
+   int i, j;
+   for (i = j = 0; i < cs.size(); i++)
+   {
+      Clause& c = ca[cs[i]];
+      if (c.mark() == valid_mark)
+         if (ig.satisfied(c))
+            remove(cs[i]);
+         else
+            cs[j++] = cs[i];
+   }
+   cs.shrink(i - j);
+}
+
+// returns true, if clauses were deleted
+template <typename Database>
+template <typename RemoveFunctor>
+bool ChanseokOhReduce<Database>::run(RemoveFunctor const & remove)
+{
+   bool res = false;
+   if (stat.conflicts >= next_T2_reduce)
+   {
+      next_T2_reduce = stat.conflicts + 10000;
+      reduceDB_Tier2();
+   }
+   if (stat.conflicts >= next_L_reduce)
+   {
+      next_L_reduce = stat.conflicts + 15000;
+      reduceDB(remove);
+      res = true;
+   }
+   return res;
+}
+
+template <typename Database>
+template <typename RemoveFunctor>
+void ChanseokOhReduce<Database>::removeSatisfied(RemoveFunctor const & remove)
+{
+   safeRemoveSatisfied(remove, learnts_core, CORE);  // Should clean core first.
+   safeRemoveSatisfied(remove, learnts_tier2, TIER2);
+   safeRemoveSatisfied(remove, learnts_local, LOCAL);
+}
+
+// applies the given functor to each clause. When the functor returns true, the clause will be removed
+template <typename Database>
+template <typename ApplyFunctor>
+void ChanseokOhReduce<Database>::applyRemoveGoodClauses(ApplyFunctor const & func)
+{
+   int i = 0, j = 0;
+   for (; i < learnts_core.size(); ++i)
+      if (!func(learnts_core[i]))
+         learnts_core[j++] = learnts_core[i];
+   learnts_core.shrink(i - j);
+   i = 0;
+   j = 0;
+   for (; i < learnts_tier2.size(); ++i)
+      if (!func(learnts_tier2[i]))
+         learnts_tier2[j++] = learnts_tier2[i];
+   learnts_tier2.shrink(i - j);
+}
+
+template <typename Database>
 ChanseokOhReduce<Database>::ChanseokOhReduce(
-                                 SolverConfig const & config,
-                                 Statistic & stat,
-                                 Database & db,
-                                 ImplicationGraph<Database> & ig)
+                                             SolverConfig const & config,
+                                             Statistic & stat,
+                                             Database & db,
+                                             ImplicationGraph<Database> & ig)
       : stat(stat),
         ca(db),
         ig(ig),

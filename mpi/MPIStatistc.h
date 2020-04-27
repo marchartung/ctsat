@@ -1,4 +1,4 @@
-/*****************************************************************************************[Main.cc]
+/*****************************************************************************************
 CTSat -- Copyright (c) 2020, Marc Hartung
                         Zuse Institute Berlin, Germany
 
@@ -40,40 +40,30 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "parallel/ParallelStatistic.h"
 #include "utils/Timer.h"
 
-namespace CTSat
+namespace ctsat
 {
 struct MPIStatistc : public PStatistic
 {
 
-   MPIStatistc(int const rank)
-         : abort(false),
-           res(lbool::Undef()),
-           rank(rank)
+   MPIStatistc()
+         : abort(false)
    {
 
    }
    void add(MPIStatistc const & h)
    {
       this->abort |= h.abort;
-      if (!h.res.isUndef())
-      {
-         assert(res == h.res || res.isUndef());
-         rank = (res.isUndef() || rank > h.rank) ? h.rank : rank;
-         res = h.res;
-      }
       PStatistic::add(h);
    }
 
    bool abort;
-   lbool res;
-   int rank;
 
 };
 
 struct MPICommunicationStat
 {
-   int const nRanks;
    uint64_t const bufferSize;
+   uint64_t numAdds;
    uint64_t numRounds;
    uint64_t numBytesReceived;
    uint64_t numBytesSend;
@@ -83,11 +73,12 @@ struct MPICommunicationStat
    uint64_t clausesRecv;
    uint64_t sumLbdSend;
    uint64_t sumLbdRecv;
+   uint64_t hashFiltered;
    Timer t;
 
-   MPICommunicationStat(int const nRanks, uint64_t const bufferSize)
-         : nRanks(nRanks),
-           bufferSize(bufferSize),
+   MPICommunicationStat(uint64_t const bufferSize)
+         : bufferSize(bufferSize),
+           numAdds(0),
            numRounds(0),
            numBytesReceived(0),
            numBytesSend(0),
@@ -96,7 +87,8 @@ struct MPICommunicationStat
            clausesSend(0),
            clausesRecv(0),
            sumLbdSend(0),
-           sumLbdRecv(0)
+           sumLbdRecv(0),
+           hashFiltered(0)
    {
    }
 
@@ -106,6 +98,7 @@ struct MPICommunicationStat
                 uint64_t const nClauses,
                 uint64_t const sLbd)
    {
+      ++numAdds;
       if (isSend)
       {
          ++numRounds;
@@ -120,7 +113,7 @@ struct MPICommunicationStat
          sumLbdRecv += sLbd;
       }
       double const fillState = static_cast<double>(nBytes + sizeof(MPIStatistc)) / bufferSize;
-      sumFillState += fillState / nRanks;
+      sumFillState += fillState;
       maxFillState = (maxFillState < fillState) ? fillState : maxFillState;
    }
 
@@ -130,9 +123,9 @@ struct MPICommunicationStat
       printf("c ##############################  per Node  ############################\n");
       printf("c rounds: %-6" PRIu64 " cl send: %-12" PRIu64 " recv: %-12" PRIu64 "\n", numRounds,
              clausesSend, clausesRecv);
-
+      std::cout << "c Hash filtered cl: " << hashFiltered << "\n";
       printf("c buffer usage: %4.2f%% max: %4.2f%%\n",
-             100.0 * sumFillState / (numRounds * nRanks), 100.0 * maxFillState);
+             100.0 * sumFillState / numAdds, 100.0 * maxFillState);
       printf("c bandwidth: %4.2f MB/s interval: %2.2f rounds/s\n",static_cast<double>(numBytesSend + numBytesReceived)
              / (1024.0 * 1024.0 * t.getPassedTime()),static_cast<double>(numRounds) / t.getPassedTime());
       printf("c ######################################################################\n\n");

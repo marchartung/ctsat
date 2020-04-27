@@ -1,4 +1,4 @@
-EXEC      = glucose_mpi
+EXEC      = ctsat_mpi
 DEPDIR    = mtl utils core initial parallel
 MROOT     = ../
 

@@ -1,36 +1,36 @@
-/*****************************************************************************************[Main.cc]
-CTSat -- Copyright (c) 2020, Marc Hartung
-                        Zuse Institute Berlin, Germany
+/*****************************************************************************************
+ CTSat -- Copyright (c) 2020, Marc Hartung
+ Zuse Institute Berlin, Germany
 
-Maple_LCM_Dist_Chrono -- Copyright (c) 2018, Vadim Ryvchin, Alexander Nadel
+ Maple_LCM_Dist_Chrono -- Copyright (c) 2018, Vadim Ryvchin, Alexander Nadel
 
-GlucoseNbSAT -- Copyright (c) 2016,Chu Min LI,Mao Luo and Fan Xiao
-                           Huazhong University of science and technology, China
-                           MIS, Univ. Picardie Jules Verne, France
+ GlucoseNbSAT -- Copyright (c) 2016,Chu Min LI,Mao Luo and Fan Xiao
+ Huazhong University of science and technology, China
+ MIS, Univ. Picardie Jules Verne, France
 
-MapleSAT -- Copyright (c) 2016, Jia Hui Liang, Vijay Ganesh
+ MapleSAT -- Copyright (c) 2016, Jia Hui Liang, Vijay Ganesh
 
-MiniSat -- Copyright (c) 2003-2006, Niklas Een, Niklas Sorensson
-           Copyright (c) 2007-2010  Niklas Sorensson
+ MiniSat -- Copyright (c) 2003-2006, Niklas Een, Niklas Sorensson
+ Copyright (c) 2007-2010  Niklas Sorensson
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the
-"Software"), to deal in the Software without restriction, including
-without limitation the rights to use, copy, modify, merge, publish,
-distribute, sublicense, and/or sell copies of the Software, and to
-permit persons to whom the Software is furnished to do so, subject to
-the following conditions:
+ Permission is hereby granted, free of charge, to any person obtaining a
+ copy of this software and associated documentation files (the
+ "Software"), to deal in the Software without restriction, including
+ without limitation the rights to use, copy, modify, merge, publish,
+ distribute, sublicense, and/or sell copies of the Software, and to
+ permit persons to whom the Software is furnished to do so, subject to
+ the following conditions:
 
-The above copyright notice and this permission notice shall be included
-in all copies or substantial portions of the Software.
+ The above copyright notice and this permission notice shall be included
+ in all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+ OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+ LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  **************************************************************************************************/
 
 #ifndef Minisat_Solver_h
@@ -44,7 +44,6 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #ifdef GLUCOSE23
 #define INT_QUEUE_AVG
-#define LOOSE_PROP_STAT
 #endif
 
 #include "mtl/Vec.h"
@@ -58,12 +57,16 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "core/ImplicationGraph.h"
 #include "utils/DratPrint.h"
 #include "utils/Random.h"
+#include "minimize/Vivification.h"
+#include "analyze/FirstUipAnalyze.h"
 
-namespace CTSat
+#include <vector>
+
+namespace ctsat
 {
 
 template <typename TConnector, typename TDatabase, typename TBranch, typename TRestart,
-      typename TReduce, typename TPropEngine, typename TExchanger>
+      typename TReduce, typename TPropEngine, typename TAnalyze, typename TExchanger>
 struct TemplateConfiguration
 {
    typedef TConnector Connector;
@@ -72,6 +75,7 @@ struct TemplateConfiguration
    typedef TRestart Restart;
    typedef TReduce Reduce;
    typedef TPropEngine PropEngine;
+   typedef TAnalyze Anaylze;
    typedef TExchanger Exchanger;
 };
 
@@ -113,7 +117,7 @@ class Solver
    Var newVar(bool const dvar);
    void removeVar(Var const v);
 
-   void removeClause(CRef cr);   // Detach and free a clause.
+   void removeClause(CRef const cr);   // Detach and free a clause.
 
    void relocAll(typename TemplateConfig::Database& to);
 
@@ -142,7 +146,7 @@ class Solver
    void setConfBudget(int64_t x);
    void setPropBudget(int64_t x);
    void interrupt();   // Trigger a (potentially asynchronous) interruption of the solver.
-   void printStats() const;
+   void printFinalStats() const;
 
    // Memory managment:
    //
@@ -150,9 +154,8 @@ class Solver
    void checkGarbage(double gf);
    void checkGarbage();
 
-
+   bool useVivification;
    int verbosity;
-   int ccmin_mode;   // Controls conflict clause minimization (0=none, 1=basic, 2=deep).
    double garbage_frac;  // The fraction of wasted memory allowed before a garbage collection is triggered.
 
    double learntsize_factor;  // The intitial limit for learnt clauses is a factor of the original clauses.                (default 1 / 3)
@@ -171,6 +174,8 @@ class Solver
    typename TemplateConfig::Restart restart;
    typename TemplateConfig::Reduce reduce;
    typename TemplateConfig::PropEngine propEngine;
+   typename TemplateConfig::Anaylze analyze;
+   Vivification<typename TemplateConfig::PropEngine> vivification;
    typename TemplateConfig::Exchanger exchange;
 
    bool ok;  // If FALSE, the constraints are already unsatisfiable. No part of the solver state may be used!
@@ -190,6 +195,7 @@ class Solver
           Database && db,
           vec<CRef> && clauses,
           DratPrint<Lit> && drat);
+
    // copy from SatInstance
    Solver(
           SolverConfig const & config,
@@ -207,17 +213,30 @@ class Solver
       }
 
       int nHighestLevel;
-      int secondHighest;
       bool bOnlyOneLitFromHighest;
+   };
+
+   struct LitAssertion
+   {
+      int const level;
+      Lit const l;
+      CRef const cr;
+      LitAssertion(int const level, Lit const l, CRef const cr)
+            : level(level),
+              l(l),
+              cr(cr)
+      {
+      }
    };
 
    int confl_to_chrono;
    int chrono;
 
+   std::vector<LitAssertion> analyzeAssertions;
+
    // Temporaries (to reduce allocation overhead). Each variable is prefixed by the method in which it is
    // used, exept 'seen' wich is used in several places.
    //
-   vec<Lit> analyze_stack;
    vec<Lit> add_tmp;
 
    // Resource contraints:
@@ -225,22 +244,26 @@ class Solver
    int64_t propagation_budget;   // -1 means no budget.
    uint64_t nbSimplifyAll;
 
-   vec<Lit> simp_learnt_clause;
-
    uint64_t curSimplify;
    uint64_t nbconfbeforesimplify;
    int incSimplify;
+
+   // returns minimum backtrack level
+   int addLearntClauses();
 
    void uncheckedEnqueue(Lit const p, int const lvl = 0, CRef const from = Database::npos());
    bool enqueue(Lit const p, CRef const from = Database::npos());
    CRef propagate();
    void cancelUntil(int const lvl);
+   bool resolveConflict(CRef const confl);
 
-   void analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel, int& out_lbd);  // (bt = backtrack)
+   // callbacks for analyze
+   void varUsedInConflict(Var const v);
    void clauseUsedInConflict(CRef const ref);
+   void clauseCreatedInConflict(vec<Lit> const & c);
 
-   void analyzeFinal(Lit p, vec<Lit>& out_conflict);  // COULD THIS BE IMPLEMENTED BY THE ORDINARIY "analyze" BY SOME REASONABLE GENERALIZATION?
-   bool litRedundant(Lit p, uint32_t abstract_levels);   // (helper method for 'analyze()')
+   CRef addLearnt(LearntClause<Database> const & lc);
+
    lbool search();   // Search for a given number of conflicts.
    void removeSatisfied(vec<CRef>& cs);   // Shrink 'cs' to contain only non-satisfied clauses.
 
@@ -249,10 +272,7 @@ class Solver
    bool withinBudget() const;
 
    bool simplifyAll();
-   void simplifyLearnt(Clause& c);
    bool simplifyClause(CRef const ref);
-
-   void simpleAnalyze(CRef confl, vec<Lit>& out_learnt, bool True_confl);
 
    bool removed(CRef cr);
 
@@ -264,6 +284,8 @@ class Solver
       for (int i = 0; i < model.size(); ++i)
          newVar(model[i].isUndef());
    }
+
+   int getBacktrackLevel(int const highestLevel, int const assertingLevel);
 
 };
 
