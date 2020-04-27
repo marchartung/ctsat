@@ -1,4 +1,4 @@
-FROM ubuntu:16.04
+FROM ubuntu:18.04
 
 RUN apt-get update && apt-get install -y openssh-server git
 RUN mkdir /var/run/sshd
@@ -37,8 +37,9 @@ RUN apt-get install make -y
 RUN DEBIAN_FRONTEND=noninteractive apt install -y iproute2 cmake python python-pip build-essential gfortran wget curl
 RUN pip install supervisor awscli
 RUN apt-get install openmpi-bin openmpi-common libopenmpi-dev iputils-ping -y
-
+RUN pwd && ls
 RUN git clone https://github.com/marchartung/ctsat ctsat
+RUN pwd && ls
 ADD ctsat ctsat
 RUN cd ctsat && ./build_mpi.sh
 #ENV LD_LIBRARY_PATH=/usr/lib/openmpi/lib/:$LD_LIBRARY_PATH
