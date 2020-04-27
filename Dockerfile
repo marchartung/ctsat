@@ -1,8 +1,23 @@
 FROM ubuntu:18.04
 
+RUN apt-get update && apt-get install -y openssh-server git \
+    unzip wget build-essential zlib1g-dev make iproute2 cmake \
+    python python-pip openmpi-bin openmpi-common libopenmpi-dev iputils-ping
+
+RUN git clone https://github.com/marchartung/ctsat ctsat
+RUN cd ctsat && ./build_mpi.sh
+
+ADD * ctsat/
+
+ADD mpi-run.sh supervised-scripts/mpi-run.sh
+ADD make_combined_hostfile.py supervised-scripts/make_combined_hostfile.py
+RUN cd ..
+
+RUN chmod 755 supervised-scripts/mpi-run.sh
 
 
-RUN apt-get update && apt-get install -y openssh-server git
+RUN pip install supervisor awscli
+
 RUN mkdir /var/run/sshd
 RUN echo 'root:THEPASSWORDYOUCREATED' | chpasswd
 RUN sed -i 's/PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
@@ -12,7 +27,6 @@ RUN sed 's@session\s*required\s*pam_loginuid.so@session optional pam_loginuid.so
 
 ENV NOTVISIBLE "in users profile"
 RUN echo "export VISIBLE=now" >> /etc/profile
-
 
 RUN echo "${USER} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 ENV SSHDIR /root/.ssh
@@ -28,32 +42,6 @@ chown -R ${USER}:${USER} ${SSHDIR}/
 # check if ssh agent is running or not, if not, run
 RUN eval `ssh-agent -s` && ssh-add ${SSHDIR}/id_rsa
 
-
-RUN apt-get update
-RUN apt-get install wget -y
-RUN apt-get install unzip
-RUN apt-get install build-essential -y
-RUN apt-get install zlib1g-dev -y
-RUN apt-get install make -y
-RUN DEBIAN_FRONTEND=noninteractive apt install -y iproute2 cmake python python-pip build-essential gfortran wget curl
-RUN pip install supervisor awscli
-RUN apt-get install openmpi-bin openmpi-common libopenmpi-dev iputils-ping -y
-
-RUN git clone https://github.com/marchartung/ctsat ctsat
-RUN cd ctsat && ./build_mpi.sh
-
-ADD * ctsat/
-
-
-#ENV LD_LIBRARY_PATH=/usr/lib/openmpi/lib/:$LD_LIBRARY_PATH
-#ADD test.cnf supervised-scripts/test.cnf
-
-ADD mpi-run.sh supervised-scripts/mpi-run.sh
-ADD make_combined_hostfile.py supervised-scripts/make_combined_hostfile.py
-RUN cd ..
-
-
-RUN chmod 755 supervised-scripts/mpi-run.sh
 EXPOSE 22
 
 #CMD hordesat/hordesat
