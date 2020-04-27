@@ -231,7 +231,7 @@ void ChanseokOhReduce<Database>::applyRemoveGoodClauses(ApplyFunctor const & fun
    i = 0;
    j = 0;
    for (; i < learnts_tier2.size(); ++i)
-      if (!func(learnts_tier2[i]))
+      if (ca[learnts_tier2[i]].mark() == TIER2 && !func(learnts_tier2[i]))
          learnts_tier2[j++] = learnts_tier2[i];
    learnts_tier2.shrink(i - j);
 }

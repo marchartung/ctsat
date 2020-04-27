@@ -82,7 +82,7 @@ BoolOption Inputs::mpiHashClauseFilter(
       false);
 
 DoubleOption Inputs::mpiMbBufferSize(_mpi, "mpi-buffer-sz",
-                                     "Number of MB allocated for send buffers", 1.0,
+                                     "Number of MB allocated for send buffers", 0.1,
                                      DoubleRange(0.1, true, HUGE_VAL, false));
 
 DoubleOption Inputs::mpi_send_interval(_mpi, "mpi-interval", "Seconds between mpi send operations",
@@ -101,8 +101,8 @@ StringOption Inputs::exchange(_parallel, "exchange", "possible options are 'none
 IntOption Inputs::nThreads(_parallel, "nthreads", "number of threads to run in parallel", 2,
                            IntRange(1, 512));
 DoubleOption Inputs::mbExchangeBufferPerThread(
-      _parallel, "mb-exchange", "number of mega bytes per thread to use for clause exchange buffer", 1.0,
-      DoubleRange(0.0001, true, HUGE_VAL, false));
+      _parallel, "mb-exchange", "number of mega bytes per thread to use for clause exchange buffer", 0.01,
+      DoubleRange(0.01, true, HUGE_VAL, false));
 IntOption Inputs::max_export_lbd(_parallel, "exp-lbd",
                                  "Maximal allowed lbd of a clause to be exported", 5,
                                  IntRange(1, 10));

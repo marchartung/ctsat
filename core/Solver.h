@@ -181,6 +181,7 @@ class Solver
    bool ok;  // If FALSE, the constraints are already unsatisfiable. No part of the solver state may be used!
    bool asynch_interrupt;
    bool remove_satisfied;  // Indicates whether possibly inefficient linear scan for satisfied clauses should be performed in 'simplify'.
+   bool steady_simplify;
 
    vec<CRef> clauses;   // List of problem clauses.
 
@@ -272,7 +273,7 @@ class Solver
    bool withinBudget() const;
 
    bool simplifyAll();
-   bool simplifyClause(CRef const ref);
+   bool simplifyClause(CRef const & ref);
 
    bool removed(CRef cr);
 

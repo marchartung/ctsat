@@ -7,7 +7,6 @@ RUN sed -i 's/PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/s
 
 # SSH login fix. Otherwise user is kicked off after login
 RUN sed 's@session\s*required\s*pam_loginuid.so@session optional pam_loginuid.so@g' -i /etc/pam.d/sshd
-RUN git clone https://github.com/marchartung/ctsat
 
 ENV NOTVISIBLE "in users profile"
 RUN echo "export VISIBLE=now" >> /etc/profile
@@ -34,11 +33,13 @@ RUN apt-get install wget -y
 RUN apt-get install unzip
 RUN apt-get install build-essential -y
 RUN apt-get install zlib1g-dev -y
+RUN apt-get install make -y
 RUN DEBIAN_FRONTEND=noninteractive apt install -y iproute2 cmake python python-pip build-essential gfortran wget curl
 RUN pip install supervisor awscli
 RUN apt-get install openmpi-bin openmpi-common libopenmpi-dev iputils-ping -y
-ADD ctsat ctsat
 
+RUN git clone https://github.com/marchartung/ctsat ctsat
+ADD ctsat ctsat
 RUN cd ctsat && ./build_mpi.sh
 #ENV LD_LIBRARY_PATH=/usr/lib/openmpi/lib/:$LD_LIBRARY_PATH
 #ADD test.cnf supervised-scripts/test.cnf
