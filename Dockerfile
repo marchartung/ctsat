@@ -1,5 +1,7 @@
 FROM ubuntu:18.04
 
+
+
 RUN apt-get update && apt-get install -y openssh-server git
 RUN mkdir /var/run/sshd
 RUN echo 'root:THEPASSWORDYOUCREATED' | chpasswd
@@ -27,7 +29,6 @@ chown -R ${USER}:${USER} ${SSHDIR}/
 RUN eval `ssh-agent -s` && ssh-add ${SSHDIR}/id_rsa
 
 
-
 RUN apt-get update
 RUN apt-get install wget -y
 RUN apt-get install unzip
@@ -37,7 +38,6 @@ RUN apt-get install make -y
 RUN DEBIAN_FRONTEND=noninteractive apt install -y iproute2 cmake python python-pip build-essential gfortran wget curl
 RUN pip install supervisor awscli
 RUN apt-get install openmpi-bin openmpi-common libopenmpi-dev iputils-ping -y
-RUN ls
 RUN git clone https://github.com/marchartung/ctsat ctsat
 RUN cd ctsat && ./build_mpi.sh
 RUN ls
