@@ -38,9 +38,12 @@ RUN apt-get install make -y
 RUN DEBIAN_FRONTEND=noninteractive apt install -y iproute2 cmake python python-pip build-essential gfortran wget curl
 RUN pip install supervisor awscli
 RUN apt-get install openmpi-bin openmpi-common libopenmpi-dev iputils-ping -y
+
 RUN git clone https://github.com/marchartung/ctsat ctsat
 RUN cd ctsat && ./build_mpi.sh
-RUN ls
+
+ADD * ctsat
+
 
 #ENV LD_LIBRARY_PATH=/usr/lib/openmpi/lib/:$LD_LIBRARY_PATH
 #ADD test.cnf supervised-scripts/test.cnf
@@ -49,10 +52,9 @@ ADD mpi-run.sh supervised-scripts/mpi-run.sh
 ADD make_combined_hostfile.py supervised-scripts/make_combined_hostfile.py
 RUN cd ..
 
-ADD ctsat ctsat
 
 RUN chmod 755 supervised-scripts/mpi-run.sh
 EXPOSE 22
 
 #CMD hordesat/hordesat
-CMD supervised-scripts/mpi-run.sh
+#CMD supervised-scripts/mpi-run.sh
