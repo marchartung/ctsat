@@ -42,7 +42,7 @@ RUN apt-get install openmpi-bin openmpi-common libopenmpi-dev iputils-ping -y
 RUN git clone https://github.com/marchartung/ctsat ctsat
 RUN cd ctsat && ./build_mpi.sh
 
-ADD * ctsat
+ADD * ctsat/
 
 
 #ENV LD_LIBRARY_PATH=/usr/lib/openmpi/lib/:$LD_LIBRARY_PATH
