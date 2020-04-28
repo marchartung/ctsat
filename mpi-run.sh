@@ -13,7 +13,7 @@ HOST_FILE_PATH="/tmp/hostfile"
 sleep 2
 echo main node: ${AWS_BATCH_JOB_MAIN_NODE_INDEX}
 echo this node: ${AWS_BATCH_JOB_NODE_INDEX}
-echo Downloading problem from S3: ${COMP_S3_PROBLEM_PATH}
+echo Downloading problem from S3: ${S3_BKT}/${COMP_S3_PROBLEM_PATH}
 
 if [[ "${COMP_S3_PROBLEM_PATH}" == *".xz" ]];
 then
