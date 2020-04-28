@@ -38,7 +38,7 @@
 
 #include <tuple>
 #include <algorithm>
-#include <mpi/mpi.h> // FIXME
+#include <mpi.h>
 #include <cstring>
 #include "mpi/MPIHelper.h"
 #include "database/BasicTypes.h"

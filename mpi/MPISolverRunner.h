@@ -36,28 +36,27 @@
 #ifndef SOURCES_MPI_MPISOLVERUNNER_H_
 #define SOURCES_MPI_MPISOLVERUNNER_H_
 
-#include "parallel/ParallelSolveRunner.h"
+#include "core/SolverRunner.h"
 #include "mpi/MPIBroadcastConnector.h"
 #include "mpi/MPIExportFilter.h"
 #include "mpi/MPISatDistributor.h"
 #include "mpi/MPIPartitioner.h"
-#include "mpi/MPISolverConfig.h"
 #include "utils/Logger.h"
+
+#include <memory>
 
 namespace ctsat
 {
 
-class MPISolverRunner : public ParallelSolverRunner<MPIBroadcastConnector>
+class MPISolverRunner : public SolverRunner
 {
  public:
-   typedef ParallelSolverRunner<MPIBroadcastConnector> Super;
-   typedef Super::ConnType ConnType;
-   typedef Super::TData TData;
+   typedef MPIBroadcastConnector ConnType;
+   typedef ThreadData<ConnType> TData;
 
    struct MPIMemory
    {
       MPIPartitioner partitioner;
-      MPISolverConfig config;
       int nthreads;
       MPISatDistributor distributor;
       MPIBroadcastConnector conn;
@@ -65,13 +64,12 @@ class MPISolverRunner : public ParallelSolverRunner<MPIBroadcastConnector>
       std::vector<TData> tdata;
       MPIMemory()
             : partitioner(),
-              config(partitioner.getGlobalRank()),
-              nthreads(config.getNumThreads()),
+              nthreads(SolverConfig::getNumRecommandedThreads(partitioner.getGlobalRank())),
               distributor(),
               conn((partitioner.isFilter()) ?
                     0 : Inputs::mbExchangeBufferPerThread * 1024ul * 1024ul,
-                   Inputs::mpiMbBufferSize * 1024ul * 1024ul, config.getNumThreads() + 1,  // +1 one because mpi thread reads too
-                   config.getMaxNumThreads(), partitioner.getPartitionComm())
+                   Inputs::mpiMbBufferSize * 1024ul * 1024ul, nthreads + 1,  // +1 one because mpi thread reads too
+                   SolverConfig::getMaxNumThreads(), partitioner.getPartitionComm())
       {
       }
    };
@@ -137,16 +135,53 @@ class MPISolverRunner : public ParallelSolverRunner<MPIBroadcastConnector>
       } else if (!receiveInstance(*mem))
          return mem;
       if (!mem->partitioner.isFilter())
-         startThreads(mem->config.getNumThreads(), mem->tdata, mem->conn, mem->inst,
+         startThreads(SolverConfig::getNumRecommandedThreads(mem->partitioner.getGlobalRank()), mem->tdata, mem->conn, mem->inst,
                       mem->partitioner.getGlobalRank());
       else
-         startFilterThreads(mem->config.getNumThreads(), mem->tdata, mem->conn, mem->inst,
+         startFilterThreads(SolverConfig::getMaxNumThreads(), mem->tdata, mem->conn, mem->inst,
                             mem->partitioner.getGlobalRank());
       mem->distributor.freeInstance();
       mem->conn.waitInitialize(mem->tdata.size());
       mem->inst.ca.clear(true);
       return mem;
    }
+
+
+   static void startThreads(
+                            size_t const threadCount,
+                            std::vector<TData> & tdata,
+                            ConnType & conn,
+                            SatInstance const & inst,
+                            int const rank = 0)
+   {
+      LOG("Starting " + std::to_string(threadCount) + " threads")
+      tdata.reserve(threadCount);
+
+      for (size_t i = 0; i < threadCount; ++i)
+      {
+         tdata.emplace_back(TData(inst, conn, i, rank));
+         if (!startThread(tdata[i]))
+            throw InputException();  // FIXME stop started threads
+      }
+   }
+
+   static void joinThreads(ConnType & conn, std::vector<TData> & tdata)
+      {
+         conn.allowMemFree();
+         for (size_t i = 0; i < tdata.size(); ++i)
+         {
+            if (pthread_join(tdata[i].pthreadId, NULL) != 0)
+               std::cout
+                  << "c Warning: Thread join failed on thread "
+                  << tdata[i].threadId
+                  << "("
+                  << tdata[i].pthreadId
+                  << ")"
+                  << std::endl;
+         }
+      }
+
+
    static void startFilterThreads(
                                   size_t const threadCount,
                                   std::vector<TData> & tdata,
@@ -164,12 +199,14 @@ class MPISolverRunner : public ParallelSolverRunner<MPIBroadcastConnector>
             throw InputException();  // FIXME stop started threads
       }
    }
+
+
    static void * pthreadStartFilter(void * v)
    {
-      ThreadData<ConnType> & data = *reinterpret_cast<ThreadData<ConnType>*>(v);
+//      TData & data = *reinterpret_cast<TData*>(v);
       LOG_INIT(data.rank)
       LOG("Filter thread " + std::to_string(pthread_self()) + " started")
-      SolverRunner::runDatabase<ConnType>(data.config, v);
+      assert(false);
       LOG("Thread finished")
       LOG_DEINIT
       pthread_exit(NULL);
@@ -179,6 +216,26 @@ class MPISolverRunner : public ParallelSolverRunner<MPIBroadcastConnector>
    {
       void * data = &d;
       int res = pthread_create(&d.pthreadId, NULL, MPISolverRunner::pthreadStartFilter, data);
+      LOG("Started thread " + std::to_string(d.pthreadId));
+      return res == 0;
+   }
+
+
+   static void * pthreadStart(void * v)
+   {
+      TData & data = *reinterpret_cast<TData*>(v);
+      LOG_INIT(data.rank)
+      LOG("Thread " + std::to_string(pthread_self()) + " started")
+      SolverRunner::runDatabase<ConnType>(SolverConfig::getMpiThreadConfig(data.threadId,data.rank), v);
+      LOG("Thread finished")
+      LOG_DEINIT
+      pthread_exit(NULL);
+   }
+
+   static bool startThread(TData & d)
+   {
+      void * data = &d;
+      int res = pthread_create(&d.pthreadId, NULL, MPISolverRunner::pthreadStart, data);
       LOG("Started thread " + std::to_string(d.pthreadId));
       return res == 0;
    }

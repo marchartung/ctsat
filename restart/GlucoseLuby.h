@@ -59,8 +59,8 @@ class GlucoseLuby
    bool isLuby;
    int nConflictsToRestart;
    int curr_restarts;
-   int restart_first;
-   double restart_inc;
+   int luby_base_factor;
+   double luby_inc_factor;
    uint64_t conflicts_VSIDS;
    AvgQueue<int> lbd_queue;   // For computing moving averages of recent LBD values.
    SolveMode & smode;
@@ -90,8 +90,8 @@ inline GlucoseLuby::GlucoseLuby(const SolverConfig& config, SolveMode& smode, St
       : isLuby(smode.branchingLrb),
         nConflictsToRestart(0),
         curr_restarts(0),
-        restart_first(config.restart_first),
-        restart_inc(config.restart_inc),
+        luby_base_factor(config.luby_base_factor),
+        luby_inc_factor(config.luby_inc_factor),
         conflicts_VSIDS(0),
         lbd_queue(config.lbd_queue),
         smode(smode),
@@ -104,7 +104,7 @@ inline void GlucoseLuby::notifyRestart()
    isLuby = smode.branchingLrb;  // never use glucose restart when lrb is used
    if (isLuby)
    {
-      nConflictsToRestart = luby(restart_inc, curr_restarts) * restart_first;
+      nConflictsToRestart = luby(luby_inc_factor, curr_restarts) * luby_base_factor;
       ++curr_restarts;
    } else
    {

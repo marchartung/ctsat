@@ -1,43 +1,47 @@
 /*****************************************************************************************
-CTSat -- Copyright (c) 2020, Marc Hartung
-                        Zuse Institute Berlin, Germany
+ CTSat -- Copyright (c) 2020, Marc Hartung
+ Zuse Institute Berlin, Germany
 
-Maple_LCM_Dist_Chrono -- Copyright (c) 2018, Vadim Ryvchin, Alexander Nadel
+ Maple_LCM_Dist_Chrono -- Copyright (c) 2018, Vadim Ryvchin, Alexander Nadel
 
-GlucoseNbSAT -- Copyright (c) 2016,Chu Min LI,Mao Luo and Fan Xiao
-                           Huazhong University of science and technology, China
-                           MIS, Univ. Picardie Jules Verne, France
+ GlucoseNbSAT -- Copyright (c) 2016,Chu Min LI,Mao Luo and Fan Xiao
+ Huazhong University of science and technology, China
+ MIS, Univ. Picardie Jules Verne, France
 
-MapleSAT -- Copyright (c) 2016, Jia Hui Liang, Vijay Ganesh
+ MapleSAT -- Copyright (c) 2016, Jia Hui Liang, Vijay Ganesh
 
-MiniSat -- Copyright (c) 2003-2006, Niklas Een, Niklas Sorensson
-           Copyright (c) 2007-2010  Niklas Sorensson
+ MiniSat -- Copyright (c) 2003-2006, Niklas Een, Niklas Sorensson
+ Copyright (c) 2007-2010  Niklas Sorensson
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the
-"Software"), to deal in the Software without restriction, including
-without limitation the rights to use, copy, modify, merge, publish,
-distribute, sublicense, and/or sell copies of the Software, and to
-permit persons to whom the Software is furnished to do so, subject to
-the following conditions:
+ Permission is hereby granted, free of charge, to any person obtaining a
+ copy of this software and associated documentation files (the
+ "Software"), to deal in the Software without restriction, including
+ without limitation the rights to use, copy, modify, merge, publish,
+ distribute, sublicense, and/or sell copies of the Software, and to
+ permit persons to whom the Software is furnished to do so, subject to
+ the following conditions:
 
-The above copyright notice and this permission notice shall be included
-in all copies or substantial portions of the Software.
+ The above copyright notice and this permission notice shall be included
+ in all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+ OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+ LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  **************************************************************************************************/
 #ifndef SOURCES_CORE_SOLVERCONFIG_H_
 #define SOURCES_CORE_SOLVERCONFIG_H_
 
 #include "initial/Inputs.h"
+#include "utils/CPUBind.h"
+
 #include <cstdint>
 #include <string>
+#include <cassert>
+#include <array>
 
 namespace ctsat
 {
@@ -48,7 +52,6 @@ enum class AnalyzeHeuristic
    MUIP,
    LEVELAWARE
 };
-
 
 inline AnalyzeHeuristic getAnalyze()
 {
@@ -171,9 +174,73 @@ inline PropagateStyle getPropagate()
    return PropagateStyle::MINISAT;
 }
 
+enum class MpiNodeType
+{
+   SINGLE_THREAD,
+   HALF_THREADS,
+   FULL_THREADS
+};
+
 class SolverConfig
 {
  public:
+
+   static MpiNodeType getNodeType(int const rank)
+   {
+      int idx = rank%10;
+      if(idx == 10)
+         return MpiNodeType::SINGLE_THREAD ;
+      else if(idx%3 == 0)
+         return MpiNodeType::FULL_THREADS;
+      else
+         return MpiNodeType::HALF_THREADS;
+   }
+
+   static int countExitingNodesTypes(int const rank)
+   {
+      MpiNodeType const type = getNodeType(rank);
+      switch(type)
+      {
+         case MpiNodeType::SINGLE_THREAD:
+               return rank/10;
+         default:
+            assert(false);
+            // FIXME only supported for single threaded nodes
+            return 0;
+      }
+   }
+
+   static int getNumRecommandedThreads(int const rank)
+   {
+      NumaAwareSet const & numa = NumaAwareSet::instance;
+      int res = Inputs::nThreads;
+      if (Inputs::mpiAutoThreads)
+      {
+         switch (getNodeType(rank))
+         {
+            case MpiNodeType::SINGLE_THREAD:
+               res = 1;
+               break;
+            case MpiNodeType::FULL_THREADS:
+               res = numa.getNumCores()-1; // communication thread
+               break;
+            default:
+               res = numa.getNumCores() / 2;
+         }
+      }
+      return std::max(1,res);
+   }
+
+   static int getMaxNumThreads()
+   {
+      if (Inputs::mpiAutoThreads)
+      {
+         NumaAwareSet const & numa = NumaAwareSet::instance;
+         return numa.getNumCores();
+      } else
+         return Inputs::nThreads;
+   }
+
    bool initialSolver;
    BranchHeuristic branch;
    RestartHeuristic restart;
@@ -211,13 +278,13 @@ class SolverConfig
    double step_size_dec;
    double min_step_size;
    double vsids_var_decay;
+   double vsids_max_var_decay;
    double dist_var_decay;
-   double timeToBranchSwitch;
 
    // Restart
    int lbd_queue;
-   int restart_first;
-   double restart_inc;
+   int luby_base_factor;
+   double luby_inc_factor;
 
    // Backtrack
    int chrono;
@@ -249,6 +316,7 @@ class SolverConfig
    bool drup;
    std::string drup_file;
    int verbosity;
+   int secToSwitchHeuristic;
 
    uint64_t conflict_budget;
    uint64_t propagation_budget;
@@ -259,6 +327,7 @@ class SolverConfig
    bool onlyExportWhenMin;
    int nThreads;
    int max_export_lbd;
+   int max_import_lbd;
    int max_export_sz;
    int numConflictsToDelete;
 
@@ -267,47 +336,105 @@ class SolverConfig
       return SolverConfig();
    }
 
-   static SolverConfig getThreadConfig(int const threadId, int const rank = 0)
+   static void makeUnsatTuned(SolverConfig & res, int num)
+   {
+      res.max_import_lbd = 5;
+      if (num > 2)
+      {
+         res.vsids_var_decay_timer = std::max((num / 2) * 2000 + 5000, 10000);
+         num %= 2;
+      }
+      switch (num)
+      {
+         case 0:
+            res.branch = BranchHeuristic::VSIDS;
+            res.reduce = ReduceHeuristic::GLUCOSE;
+            res.restart = RestartHeuristic::GLUCOSE;
+            break;
+         case 1:
+            res.branch = BranchHeuristic::VSIDS;
+            res.reduce = ReduceHeuristic::CHANSEOKOH;
+            res.restart = RestartHeuristic::GLUCOSE;
+            break;
+         default:
+            assert(false);
+      }
+   }
+
+   static void makeSatTuned(SolverConfig & res, int num)
+   {
+      res.branch = BranchHeuristic::LRB;
+      res.reduce = ReduceHeuristic::CHANSEOKOH;
+      res.restart = RestartHeuristic::LUBY;
+      res.max_import_lbd = 3;
+      if (num == 1)
+         res.luby_inc_factor = 80;
+      if (num > 1)
+         res.luby_inc_factor += 20 * (num - 1);
+   }
+
+   static void makeMixed(SolverConfig & res, int num)
+   {
+
+      res.max_import_lbd = 4;
+      switch (num % 2)
+      {
+         case 0:
+            res.branch = BranchHeuristic::VSIDS;
+            res.reduce = ReduceHeuristic::CHANSEOKOH;
+            res.restart = RestartHeuristic::LUBY;
+            break;
+         case 1:
+            res.branch = BranchHeuristic::LRB;
+            res.reduce = ReduceHeuristic::GLUCOSE;
+            res.restart = RestartHeuristic::LUBY;
+            break;
+         default:
+            assert(false);
+      }
+   }
+
+   static SolverConfig getThreadConfig(int threadId, double const seedAdd = 0)
    {
       SolverConfig res;
-
-      // 1. reduce: chanseok, glucose
-      // 2. restart: mixed, luby glucose
-      // 3. branch: mixed, vsids, lrb, dist, chb
-
-      //FIXME meaningful combis:
-
-      // balanced:
-      // 1. chanseok 2. mixed 3. mixed false init
-      // 1. chanseok 2. mixed 3. mixed true init
-      // 1. chanseok 2. luby 3. dist-vsids
-      // 1- glucose 2. glucose 3. lrb
-
-      //unsat:
-      // 1. glucose 2.glucose 3. dist-vsids
-      // 1. chanseok 2.glucose 3. dist-vsids
-
-      // sat:
-      // 1. chanseok 2. luby 3. lrb
-      // 1. chanseok 2. luby 3 chb
-
-
-      // first: just modify branch init
-      res.initVarPolZero = threadId % 2;
-      if (rank == 0 && threadId < 2)
-      {
-         res.rnd_active = false;
-         res.rnd_polarity = false;
-      } else
-      {
-         int const globId = res.nThreads*rank+threadId;
-         res.rnd_active = true;
-         res.rnd_polarity = globId%4 > 1;
-         res.rnd_seed = res.rnd_seed+globId;
-      }
       res.initialSolver = false;
       res.verbosity = -1;
+      res.rnd_active = true;
+      res.rnd_seed += 9919.4853094755497L * (threadId + seedAdd);
+
+      if (threadId > 1)
+      {
+         res.initialSolver = false;
+         res.verbosity = -1;
+         threadId -= 2;
+         switch (threadId % 3)
+         {
+            case 0:
+               makeUnsatTuned(res, threadId / 3);
+               break;
+            case 1:
+               makeSatTuned(res, threadId / 3);
+               break;
+            default:
+               makeMixed(res, threadId / 3);
+         }
+      } else
+      {
+         // the first two threads use the input heuristic except:
+         res.max_import_lbd = 4;
+         res.initVarPolZero = threadId % 2;
+      }
       return res;
+
+   }
+
+   static SolverConfig getMpiThreadConfig(int threadId, int const rank)
+   {
+      if (Inputs::mpiAutoThreads
+         && getNodeType(rank) == MpiNodeType::SINGLE_THREAD)
+         threadId = countExitingNodesTypes(rank);
+
+      return getThreadConfig(threadId, NumaAwareSet::instance.getNumCores() * rank);
    }
 
    SolverConfig()
@@ -338,17 +465,17 @@ class SolverConfig
            rnd_active(Inputs::rnd_init_act),
            rnd_polarity(Inputs::rnd_polarity),
            initVarPolZero(Inputs::initVarPolZero),
-           vsids_var_decay_timer(5000),
+           vsids_var_decay_timer(Inputs::vsids_var_decay_timer),
            step_size(Inputs::step_size),
            step_size_dec(Inputs::step_size_dec),
            min_step_size(Inputs::min_step_size),
-           vsids_var_decay(Inputs::var_decay),
+           vsids_var_decay(Inputs::vsids_var_decay),
+           vsids_max_var_decay(Inputs::vsids_max_var_decay),
            dist_var_decay(0.6),
-           timeToBranchSwitch(2500),
 
            lbd_queue(50),
-           restart_first(Inputs::restart_first),
-           restart_inc(Inputs::restart_inc),
+           luby_base_factor(Inputs::luby_base_factor),
+           luby_inc_factor(Inputs::luby_inc_factor),
            chrono(Inputs::chrono),
            confl_to_chrono(Inputs::conf_to_chrono),
 
@@ -374,6 +501,7 @@ class SolverConfig
            drup(static_cast<bool>(Inputs::drup)),
            drup_file(static_cast<std::string>(Inputs::drup_file)),
            verbosity(Inputs::verb),
+           secToSwitchHeuristic(Inputs::secToSwitchHeuristic),
            conflict_budget(Inputs::conflict_budget),
            propagation_budget(Inputs::propagation_budget),
            pinSolver(Inputs::pinSolver),
@@ -381,6 +509,7 @@ class SolverConfig
            onlyExportWhenMin(Inputs::onlyExportWhenMin),
            nThreads(Inputs::nThreads),
            max_export_lbd(Inputs::max_export_lbd),
+           max_import_lbd(Inputs::max_import_lbd),
            max_export_sz(Inputs::max_export_sz),
            numConflictsToDelete(Inputs::numConflictsToDelete)
    {

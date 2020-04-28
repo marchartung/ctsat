@@ -37,7 +37,7 @@
 #define MPI_MPIPARTITIONER_H_
 
 #include "initial/Inputs.h"
-#include <mpi/mpi.h> // FIXME
+#include <mpi.h>
 
 namespace ctsat
 {

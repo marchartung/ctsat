@@ -39,7 +39,6 @@
 #include <cstdint>
 #include <tuple>
 #include <algorithm>
-#include <mpi/mpi.h> // FIXME
 #include <unistd.h>
 
 #include "parallel/AtomicConnector.h"
@@ -291,6 +290,7 @@ void MPIBroadcastConnector::abort(MPIStatistc& header)
       header.abort = true;
       send(header);
    }
+   NoConnector::abort();
 }
 
 void MPIBroadcastConnector::send(const MPIStatistc& header)
@@ -334,10 +334,6 @@ inline MPIBroadcastConnector::MPIBroadcastConnector(
         sendBuffer(NULL),
         recvBuffer(NULL)
 {
-   static bool initFirst = true;
-   assert(initFirst);
-   initFirst = false;
-
    MPI_Comm_size(comm, &nRanks);
    MPI_Comm_rank(comm, &rank);
    if (bytesPerThread > 0)

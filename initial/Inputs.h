@@ -61,7 +61,9 @@ class Inputs
    static DoubleOption step_size;
    static DoubleOption step_size_dec;
    static DoubleOption min_step_size;
-   static DoubleOption var_decay;
+   static DoubleOption vsids_var_decay;
+   static DoubleOption vsids_max_var_decay;
+   static IntOption vsids_var_decay_timer;
    static DoubleOption clause_decay;
    static DoubleOption random_seed;
    static IntOption ccmin_mode;
@@ -71,8 +73,8 @@ class Inputs
    static BoolOption rnd_init_act;
    static BoolOption rnd_polarity;
    static BoolOption initVarPolZero;
-   static IntOption restart_first;
-   static DoubleOption restart_inc;
+   static IntOption luby_base_factor;
+   static DoubleOption luby_inc_factor;
    static DoubleOption garbage_frac;
    static IntOption chrono;
    static IntOption conf_to_chrono;
@@ -92,6 +94,7 @@ class Inputs
    static DoubleOption simp_garbage_frac;
 
    static IntOption verb;
+   static IntOption secToSwitchHeuristic;
    static DoubleOption print_interval;
    static IntOption cpu_lim;
    static IntOption mem_lim;
@@ -105,6 +108,7 @@ class Inputs
    static BoolOption minimize_import_cl;
    static IntOption nThreads;
    static IntOption max_export_lbd;
+   static IntOption max_import_lbd;
    static IntOption max_export_sz;
    static IntOption numConflictsToDelete;
 

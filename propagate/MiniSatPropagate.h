@@ -86,6 +86,7 @@ class MinisatPropagate
    void cancelUntil(BranchType & branch, int const bLevel);
 
    bool isAttached(CRef const & ref) const;
+   bool isBadAttached(CRef const & ref) const;
 
    bool binResMinimize(vec<Lit>& out_learnt);  // Further learnt clause minimization by binary resolution.
    bool extendedBinResMinimize(vec<Lit>& out_learnt);
@@ -600,6 +601,29 @@ bool MinisatPropagate<DatabaseType>::isAttached(CRef const & ref) const
          return false;
    }
    return true;
+}
+
+template <typename DatabaseType>
+bool MinisatPropagate<DatabaseType>::isBadAttached(CRef const & ref) const
+{
+   Clause const & c = ca[ref];
+   Watcher const lookedFor(ref,c[0]);
+   assert(lookedFor == Watcher(ref,c[1]));
+   OccLists<Lit, vec<Watcher>, WatcherDeleted> const & ws = c.size() == 2 ? watches_bin : watches;
+   unsigned count = 0;
+   for (int k = 0; k < c.size(); ++k)
+   {
+      vec<Watcher> const & wats = ws[~c[k]];
+      int i = 0;
+      for (; i < wats.size(); ++i)
+         if (wats[i] == lookedFor)
+         {
+            ++count;
+            if(count > 2 || i > 1)
+               return true;
+         }
+   }
+   return false;
 }
 
 template <typename DatabaseType>

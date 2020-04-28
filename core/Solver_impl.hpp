@@ -189,7 +189,7 @@ template <typename TemplateConfig>
 void Solver<TemplateConfig>::setModel(vec<lbool> & model)
 {
 LOG("setting model")
-            assert(ig.nVars() <= model.size());
+                              assert(ig.nVars() <= model.size());
    for (Var i = 0; i < ig.nVars(); ++i)
    {
       lbool const val = ig.value(i);
@@ -211,6 +211,8 @@ bool Solver<TemplateConfig>::simplifyClause(CRef const & cr)
       return false;
    else
    {
+      if(!propEngine.isAttached(cr))
+         std::cout << "is bad attached: " << propEngine.isBadAttached(cr) << "\n";
       propEngine.detachClause(cr, true);
       if (vivification.run(c))
          drat.addClause(c);
@@ -245,7 +247,7 @@ inline bool Solver<TemplateConfig>::simplifyAll()
    //
    if (useVivification && stat.conflicts >= curSimplify * nbconfbeforesimplify)
    {
-      LOG("Simplifies clauses")
+      LOG("Simplifies clauses");
       if (propagate() != CRef_Undef)
          setOk(false);
       else
@@ -254,13 +256,11 @@ inline bool Solver<TemplateConfig>::simplifyAll()
 
          reduce.applyRemoveGoodClauses([&](CRef const & cr)
          {
-            CRef const inRef = cr;
             if (withinBudget() && isOk())
             {
                // ensure polling import clauses also when load on simplification is high
                if (exchange.shouldFetch())
                exchange.fetchClauses();
-               assert(cr == inRef);
                return simplifyClause(cr);
             }
             else
@@ -277,10 +277,11 @@ inline bool Solver<TemplateConfig>::simplifyAll()
             nbconfbeforesimplify += incSimplify;
          }
       }
-   LOG("Simplify finished")
-}
 
-return isOk();
+      LOG("Simplify finished");
+   }
+
+   return isOk();
 }
 
 //=================================================================================================
@@ -293,120 +294,120 @@ return isOk();
 template <typename TemplateConfig>
 inline typename Solver<TemplateConfig>::Var Solver<TemplateConfig>::newVar(bool const dvar)
 {
-Var const v = branch.newVar(dvar);
-ig.newVar();
-branch.setDecisionVar(v, dvar);
-propEngine.newVar();
-return v;
+   Var const v = branch.newVar(dvar);
+   ig.newVar();
+   branch.setDecisionVar(v, dvar);
+   propEngine.newVar();
+   return v;
 }
 
 template <typename TemplateConfig>
 void Solver<TemplateConfig>::removeVar(Var const v)
 {
-propEngine.removeVar(v);
+   propEngine.removeVar(v);
 }
 
 template <typename TemplateConfig>
 void Solver<TemplateConfig>::removeClause(CRef const cr)
 {
-Clause& c = ca[cr];
-if (c.mark() != 1)
-   drat.removeClause(c);  // FIXME drat must be in database
+   Clause& c = ca[cr];
+   if (c.mark() != 1)
+      drat.removeClause(c);  // FIXME drat must be in database
 
-propEngine.detachClause(cr);
+   propEngine.detachClause(cr);
 // Don't leave pointers to free'd memory!
-if (ig.locked(c))
-{
-   Lit implied = c.size() != 2 ? c[0] : (ig.value(c[0]).isTrue() ? c[0] : c[1]);
-   ig.reason(implied) = CRef_Undef;
-}
-ca.remove(cr);
+   if (ig.locked(c))
+   {
+      Lit implied = c.size() != 2 ? c[0] : (ig.value(c[0]).isTrue() ? c[0] : c[1]);
+      ig.reason(implied) = CRef_Undef;
+   }
+   ca.remove(cr);
 }
 
 template <typename TemplateConfig>
 inline typename Solver<TemplateConfig>::ConflictData Solver<TemplateConfig>::FindConflictLevel(
                                                                                                CRef cind)
 {
-ConflictData data;
-Clause& conflCls = ca[cind];
-data.nHighestLevel = ig.level(conflCls[0]);
-if (data.nHighestLevel == ig.decisionLevel() && ig.level(conflCls[1]) == ig.decisionLevel())
-{
-   return data;
-}
-
-int highestId = 0;
-data.bOnlyOneLitFromHighest = true;
-// find the largest decision level in the clause
-for (int nLitId = 1; nLitId < conflCls.size(); ++nLitId)
-{
-   int const nLevel = ig.level(conflCls[nLitId]);
-   if (nLevel > data.nHighestLevel)
+   ConflictData data;
+   Clause& conflCls = ca[cind];
+   data.nHighestLevel = ig.level(conflCls[0]);
+   if (data.nHighestLevel == ig.decisionLevel() && ig.level(conflCls[1]) == ig.decisionLevel())
    {
-      highestId = nLitId;
-      data.nHighestLevel = nLevel;
-      data.bOnlyOneLitFromHighest = true;
-   } else if (nLevel == data.nHighestLevel && data.bOnlyOneLitFromHighest == true)
-      data.bOnlyOneLitFromHighest = false;
+      return data;
+   }
 
-}
-
-if (highestId != 0)
-   propEngine.swapWatched(cind, 0, highestId);
-if (data.bOnlyOneLitFromHighest)
-{
-   int secondHighest = ig.level(conflCls[1]);
-   highestId = 1;
+   int highestId = 0;
+   data.bOnlyOneLitFromHighest = true;
+// find the largest decision level in the clause
    for (int nLitId = 1; nLitId < conflCls.size(); ++nLitId)
    {
       int const nLevel = ig.level(conflCls[nLitId]);
-      if (nLevel > secondHighest)
+      if (nLevel > data.nHighestLevel)
       {
          highestId = nLitId;
-         secondHighest = nLevel;
-      }
-   }
-   if (highestId != 1)
-      propEngine.swapWatched(cind, 1, highestId);
-   assert(ig.level(conflCls[1]) < ig.level(conflCls[0]));
-   for (int i = 2; i < conflCls.size(); ++i)
-      assert(ig.level(conflCls[i]) <= ig.level(conflCls[1]));
-}
+         data.nHighestLevel = nLevel;
+         data.bOnlyOneLitFromHighest = true;
+      } else if (nLevel == data.nHighestLevel && data.bOnlyOneLitFromHighest == true)
+         data.bOnlyOneLitFromHighest = false;
 
-return data;
+   }
+
+   if (highestId != 0)
+      propEngine.swapWatched(cind, 0, highestId);
+   if (data.bOnlyOneLitFromHighest)
+   {
+      int secondHighest = ig.level(conflCls[1]);
+      highestId = 1;
+      for (int nLitId = 1; nLitId < conflCls.size(); ++nLitId)
+      {
+         int const nLevel = ig.level(conflCls[nLitId]);
+         if (nLevel > secondHighest)
+         {
+            highestId = nLitId;
+            secondHighest = nLevel;
+         }
+      }
+      if (highestId != 1)
+         propEngine.swapWatched(cind, 1, highestId);
+      assert(ig.level(conflCls[1]) < ig.level(conflCls[0]));
+      for (int i = 2; i < conflCls.size(); ++i)
+         assert(ig.level(conflCls[i]) <= ig.level(conflCls[1]));
+   }
+
+   return data;
 }
 
 template <typename TemplateConfig>
 inline void Solver<TemplateConfig>::clauseUsedInConflict(CRef const ref)
 {
-reduce.clauseUsedInConflict(ref);
-exchange.clauseUsedInConflict(ref);
+   reduce.clauseUsedInConflict(ref);
+   exchange.clauseUsedInConflict(ref);
 }
 
 template <typename TemplateConfig>
 inline void Solver<TemplateConfig>::varUsedInConflict(Var const v)
 {
-branch.notifyVarSeenInConflict(v);
+   branch.notifyVarSeenInConflict(v);
 }
 template <typename TemplateConfig>
 inline void Solver<TemplateConfig>::clauseCreatedInConflict(vec<Lit> const & c)
 {
-branch.notifyCreatedLearntClause(c);
+   branch.notifyCreatedLearntClause(c);
 }
 
 template <typename TemplateConfig>
 void Solver<TemplateConfig>::removeSatisfied(vec<CRef>& cs)
 {
-int i, j;
-for (i = j = 0; i < cs.size(); i++)
-{
-   Clause& c = ca[cs[i]];
-   if (ig.satisfied(c))
-      removeClause(cs[i]);
-   else
-      cs[j++] = cs[i];
-}
-cs.shrink(i - j);
+   int i, j;
+   for (i = j = 0; i < cs.size(); i++)
+   {
+      Clause& c = ca[cs[i]];
+      if (ig.satisfied(c))
+         removeClause(cs[i]);
+      else
+         cs[j++] = cs[i];
+   }
+   cs.shrink(i - j);
 }
 
 /*_________________________________________________________________________________________________
@@ -420,98 +421,98 @@ cs.shrink(i - j);
 template <typename TemplateConfig>
 bool Solver<TemplateConfig>::simplify()
 {
-assert(ig.decisionLevel() == 0);
+   assert(ig.decisionLevel() == 0);
 
-if (!isOk() || propagate() != CRef_Undef)
-{
-   return setOk(false);
-}
+   if (!isOk() || propagate() != CRef_Undef)
+   {
+      return setOk(false);
+   }
 
-if (nAssigns() == stat.simpDB_assigns || (stat.simpDB_props > 0))
-   return true;
+   if (nAssigns() == stat.simpDB_assigns || (stat.simpDB_props > 0))
+      return true;
 
 // Remove satisfied clauses:
-reduce.removeSatisfied([&](CRef const & ref)
-{  removeClause(ref);});
-if (remove_satisfied)        // Can be turned off.
-   removeSatisfied(clauses);
-checkGarbage();
-branch.rebuildOrderHeap();
+   reduce.removeSatisfied([&](CRef const & ref)
+   {  removeClause(ref);});
+   if (remove_satisfied)        // Can be turned off.
+      removeSatisfied(clauses);
+   checkGarbage();
+   branch.rebuildOrderHeap();
 
-stat.simpDB_assigns = nAssigns();
-stat.simpDB_props = stat.clauses_literals + stat.learnts_literals;  // (shouldn't depend on stats really, but it will do for now)
+   stat.simpDB_assigns = nAssigns();
+   stat.simpDB_props = stat.clauses_literals + stat.learnts_literals;  // (shouldn't depend on stats really, but it will do for now)
 
-return true;
+   return true;
 }
 
 template <typename TemplateConfig>
 bool Solver<TemplateConfig>::importClauses()
 {
 LOG("Imports clauses")
-   assert(ig.decisionLevel() == 0);
-Lit u;
-bool attached;
-CRef ref;
-exchange.fetchClauses();
-while ((u = exchange.getImportUnit()) != Lit::Undef())
-   if (!enqueue(u))
-   {
-      std::cout << "c unit import conflict not caught\n";
-   }
-while (std::get<1>((std::tie(attached, ref) = exchange.getImportClause())) != Database::npos())
-{
-   reduce.addClause(ref);
-   if (!attached && propEngine.safeAttachClause(ref) < ig.nVars() && ig.value(ca[ref][0]).isUndef())
-   {
-      uncheckedEnqueue(ca[ref][0], ref, 0);
-      if (propagate() != Database::npos())
+            assert(ig.decisionLevel() == 0);
+   Lit u;
+   bool attached;
+   CRef ref;
+   exchange.fetchClauses();
+   while ((u = exchange.getImportUnit()) != Lit::Undef())
+      if (!enqueue(u))
          return setOk(false);
+   while (std::get<1>((std::tie(attached, ref) = exchange.getImportClause())) != Database::npos())
+   {
+      reduce.addClause(ref);
+      if (!attached
+         && propEngine.safeAttachClause(ref) < ig.nVars()
+         && ig.value(ca[ref][0]).isUndef())
+      {
+         uncheckedEnqueue(ca[ref][0], ref, 0);
+         if (propagate() != Database::npos())
+            return setOk(false);
+      }
    }
-}
-LOG("Imports clauses end")
-return exchange.isOk();
+   LOG("Imports clauses end")
+   return exchange.isOk();
 }
 template <typename TemplateConfig>
 inline int Solver<TemplateConfig>::getBacktrackLevel(
                                                      int const highestLevel,
                                                      int const assertingLevel)
 {
-bool const shouldChrono = (confl_to_chrono < 0
-   || static_cast<unsigned>(confl_to_chrono) <= stat.conflicts)
-   && chrono > -1
-   && (ig.decisionLevel() - assertingLevel) >= chrono;
-int backtrackLevel = assertingLevel;
+   bool const shouldChrono = (confl_to_chrono < 0
+      || static_cast<unsigned>(confl_to_chrono) <= stat.conflicts)
+      && chrono > -1
+      && (ig.decisionLevel() - assertingLevel) >= chrono;
+   int backtrackLevel = assertingLevel;
 
-if (shouldChrono)
-{
-   backtrackLevel = highestLevel - 1;
-   ++stat.chrono_backtrack;
-}
-stat.non_chrono_backtrack += !shouldChrono;
-LOG("Backtrack to " + std::to_string(backtrackLevel))
-return backtrackLevel;
+   if (shouldChrono)
+   {
+      backtrackLevel = highestLevel - 1;
+      ++stat.chrono_backtrack;
+   }
+   stat.non_chrono_backtrack += !shouldChrono;
+//   LOG("Backtrack to " + std::to_string(backtrackLevel))
+   return backtrackLevel;
 }
 
 template <typename VarVisit, typename ClauseVisit, typename ClauseCreated>
 struct AnalyseCallbacks
 {
-VarVisit const onVarVisit;
-ClauseVisit const onClauseVisit;
-ClauseCreated const onClauseCreated;
+   VarVisit const onVarVisit;
+   ClauseVisit const onClauseVisit;
+   ClauseCreated const onClauseCreated;
 
-AnalyseCallbacks(
-                 VarVisit const & onVarVisit,
-                 ClauseVisit const & onClauseVisit,
-                 ClauseCreated const & onClauseCreated);
+   AnalyseCallbacks(
+                    VarVisit const & onVarVisit,
+                    ClauseVisit const & onClauseVisit,
+                    ClauseCreated const & onClauseCreated);
 };
 template <typename VarVisit, typename ClauseVisit, typename ClauseCreated>
 inline AnalyseCallbacks<VarVisit, ClauseVisit, ClauseCreated>::AnalyseCallbacks(
                                                                                 VarVisit const & onVarVisit,
                                                                                 ClauseVisit const & onClauseVisit,
                                                                                 ClauseCreated const & onClauseCreated)
-   : onVarVisit(onVarVisit),
-     onClauseVisit(onClauseVisit),
-     onClauseCreated(onClauseCreated)
+      : onVarVisit(onVarVisit),
+        onClauseVisit(onClauseVisit),
+        onClauseCreated(onClauseCreated)
 {
 }
 
@@ -522,126 +523,126 @@ inline AnalyseCallbacks<VarVisit, ClauseVisit, ClauseCreated> getCallbacks(
                                                                            ClauseVisit const & onClauseVisit,
                                                                            ClauseCreated const & onClauseCreated)
 {
-return AnalyseCallbacks<VarVisit, ClauseVisit, ClauseCreated>(onVarVisit, onClauseVisit,
-                                                              onClauseCreated);
+   return AnalyseCallbacks<VarVisit, ClauseVisit, ClauseCreated>(onVarVisit, onClauseVisit,
+                                                                 onClauseCreated);
 }
 
 template <typename TemplateConfig>
 inline bool Solver<TemplateConfig>::resolveConflict(CRef const confl)
 {
-auto const callbacks = getCallbacks([&](Var const v)
-{  varUsedInConflict(v);},
-                                    [&](CRef const cref)
-                                    {  clauseUsedInConflict(cref);},
-                                    [&](vec<Lit> const & c)
-                                    {  clauseCreatedInConflict(c);});
-LOG("Conflict found")
-int assertingLevel;
-analyzeAssertions.clear();
-reduce.adjustOnConflict();
-branch.notifyConflictFound1(confl);
-restart.notifyConflictFound();
-exchange.conflictFound();
+   auto const callbacks = getCallbacks([&](Var const v)
+   {  varUsedInConflict(v);},
+                                       [&](CRef const cref)
+                                       {  clauseUsedInConflict(cref);},
+                                       [&](vec<Lit> const & c)
+                                       {  clauseCreatedInConflict(c);});
+   LOG("Conflict found")
+   int assertingLevel;
+   analyzeAssertions.clear();
+   reduce.adjustOnConflict();
+   branch.notifyConflictFound1(confl);
+   restart.notifyConflictFound();
+   exchange.conflictFound();
 
-ConflictData const conflInfo = FindConflictLevel(confl);
-LOG("Conflict level " + std::to_string(conflInfo.nHighestLevel))
-if (conflInfo.nHighestLevel == 0)
-{
-   LOG("Level 0 conflict")
-   return setOk(false);
-}
-
-if (conflInfo.bOnlyOneLitFromHighest)
-{
-   Clause const & c = ca[confl];
-   analyzeAssertions.emplace_back(ig.level(c[1]), c[0], confl);
-   assertingLevel = analyzeAssertions.back().level;
-} else
-{
-
-   branch.notifyConflictFound2(confl);
-
-   analyze.run(confl, callbacks);
-   assertingLevel = addLearntClauses();
-
-   branch.notifyConflictResolved();
-   reduce.notifyConflictResolved();
-}
-cancelUntil(getBacktrackLevel(conflInfo.nHighestLevel, assertingLevel));
-stat.level_backtracked += conflInfo.nHighestLevel - ig.decisionLevel();
-
-assert(analyzeAssertions.size() > 0);
-for (auto const & prop : analyzeAssertions)
-   if (prop.level <= ig.decisionLevel() && ig.value(prop.l).isUndef())
+   ConflictData const conflInfo = FindConflictLevel(confl);
+//   LOG("Conflict level " + std::to_string(conflInfo.nHighestLevel))
+   if (conflInfo.nHighestLevel == 0)
    {
-      if (prop.cr != Database::npos())
-      {
-         Clause const & c = ca[prop.cr];
-         assert(prop.l == c[0]);
-         for (int i = 1; i < c.size(); ++i)
-            assert(ig.value(c[i]).isFalse());
-      }
-      uncheckedEnqueue(prop.l, prop.level, prop.cr);
+      LOG("Level 0 conflict")
+      return setOk(false);
    }
-LOG("Conflict resolved")
-return true;
+
+   if (conflInfo.bOnlyOneLitFromHighest)
+   {
+      Clause const & c = ca[confl];
+      analyzeAssertions.emplace_back(ig.level(c[1]), c[0], confl);
+      assertingLevel = analyzeAssertions.back().level;
+   } else
+   {
+
+      branch.notifyConflictFound2(confl);
+
+      analyze.run(confl, callbacks);
+      assertingLevel = addLearntClauses();
+
+      branch.notifyConflictResolved();
+      reduce.notifyConflictResolved();
+   }
+   cancelUntil(getBacktrackLevel(conflInfo.nHighestLevel, assertingLevel));
+   stat.level_backtracked += conflInfo.nHighestLevel - ig.decisionLevel();
+
+   assert(analyzeAssertions.size() > 0);
+   for (auto const & prop : analyzeAssertions)
+      if (prop.level <= ig.decisionLevel() && ig.value(prop.l).isUndef())
+      {
+         if (prop.cr != Database::npos())
+         {
+            Clause const & c = ca[prop.cr];
+            assert(prop.l == c[0]);
+            for (int i = 1; i < c.size(); ++i)
+               assert(ig.value(c[i]).isFalse());
+         }
+         uncheckedEnqueue(prop.l, prop.level, prop.cr);
+      }
+   LOG("Conflict resolved")
+   return true;
 }
 
 template <typename TemplateConfig>
 inline int Solver<TemplateConfig>::addLearntClauses()
 {
-int assertingLevel = ig.decisionLevel(), lbd = std::numeric_limits<int>::max(), nAdded = 0;
-assert(analyze.hasLearntClause());
+   int assertingLevel = ig.decisionLevel(), lbd = std::numeric_limits<int>::max(), nAdded = 0;
+   assert(analyze.hasLearntClause());
 
-if (analyze.learntsMultipleClauses())
-   while (analyze.hasLearntClause())
-   {
-      LearntClause<Database> const & lc = analyze.getLearntClause();
-      CRef const cr = addLearnt(lc);
-      ++nAdded;
-      if (lc.isAsserting)
+   if (analyze.learntsMultipleClauses())
+      while (analyze.hasLearntClause())
       {
-         analyzeAssertions.emplace_back((lc.c.size() > 1) ? ig.level(lc.c[1]) : 0, lc.c[0], cr);
-         assertingLevel = std::min(assertingLevel, analyzeAssertions.back().level);
-         assert(
-               analyzeAssertions.back().level > 0
-                  || analyzeAssertions.back().cr == Database::npos());
-         lbd = std::min(lbd, lc.lbd);
+         LearntClause<Database> const & lc = analyze.getLearntClause();
+         CRef const cr = addLearnt(lc);
+         ++nAdded;
+         if (lc.isAsserting)
+         {
+            analyzeAssertions.emplace_back((lc.c.size() > 1) ? ig.level(lc.c[1]) : 0, lc.c[0], cr);
+            assertingLevel = std::min(assertingLevel, analyzeAssertions.back().level);
+            assert(
+                  analyzeAssertions.back().level > 0
+                     || analyzeAssertions.back().cr == Database::npos());
+            lbd = std::min(lbd, lc.lbd);
+         }
       }
+   else
+   {
+      nAdded = 1;
+      LearntClause<Database> const & lc = analyze.getLearntClause();
+      analyzeAssertions.emplace_back((lc.c.size() > 1) ? ig.level(lc.c[1]) : 0, lc.c[0],
+                                     addLearnt(lc));
+      assertingLevel = analyzeAssertions.back().level;
+      lbd = lc.lbd;
    }
-else
-{
-   nAdded = 1;
-   LearntClause<Database> const & lc = analyze.getLearntClause();
-   analyzeAssertions.emplace_back((lc.c.size() > 1) ? ig.level(lc.c[1]) : 0, lc.c[0],
-                                  addLearnt(lc));
-   assertingLevel = analyzeAssertions.back().level;
-   lbd = lc.lbd;
-}
-LOG("Added " + std::to_string(nAdded) + " clauses")
-stat.nAdditionalLearnt += nAdded - 1;
-restart.clauseLearnt(lbd);  // only use heuristic on one clause
-return assertingLevel;
+//   LOG("Added " + std::to_string(nAdded) + " clauses")
+   stat.nAdditionalLearnt += nAdded - 1;
+   restart.clauseLearnt(lbd);  // only use heuristic on one clause
+   return assertingLevel;
 }
 
 template <typename TemplateConfig>
 typename Solver<TemplateConfig>::CRef Solver<TemplateConfig>::addLearnt(
                                                                         LearntClause<Database> const & lc)
 {
-CRef cr = Database::npos();
-drat.addClause(lc.c);
-if (lc.c.size() == 1)
-   exchange.unitLearnt(lc.c[0]);
-else
-{
-   cr = ca.alloc(lc.c, true);
-   Clause & c = ca[cr];
-   c.set_lbd(lc.lbd);
-   propEngine.attachClause(cr);
-   reduce.addClause(cr);
-   exchange.clauseLearnt(cr);
-}
-return cr;
+   CRef cr = Database::npos();
+   drat.addClause(lc.c);
+   if (lc.c.size() == 1)
+      exchange.unitLearnt(lc.c[0]);
+   else
+   {
+      cr = ca.alloc(lc.c, true);
+      Clause & c = ca[cr];
+      c.set_lbd(lc.lbd);
+      propEngine.attachClause(cr);
+      reduce.addClause(cr);
+      exchange.clauseLearnt(cr);
+   }
+   return cr;
 }
 
 /*_________________________________________________________________________________________________
@@ -659,111 +660,111 @@ return cr;
 template <typename TemplateConfig>
 typename Solver<TemplateConfig>::lbool Solver<TemplateConfig>::search()
 {
-assert(isOk());
-bool firstAfterConflict = false;
-while (true)
-{
-   CRef const confl = propagate();
-
-   if (confl != CRef_Undef)
+   assert(isOk());
+   bool firstAfterConflict = false;
+   while (true)
    {
-      ++stat.conflicts;
-      if (verbosity > 0 && stat.conflicts % 20000 == 0)
-         stat.print();
-      if (!resolveConflict(confl))
-         return lbool::False();
-      firstAfterConflict = true;
-      continue;
-   }
+      CRef const confl = propagate();
 
-   if (firstAfterConflict)
-   {
-      firstAfterConflict = false;
-      if (restart.shouldRestart() || exchange.isFinished() || !withinBudget())
+      if (confl != CRef_Undef)
       {
-         cancelUntil(0);
-         return lbool::Undef();
-      }
-
-      if (ig.decisionLevel() == 0)
-      {
-         if (!importClauses() || !simplify())
+         ++stat.conflicts;
+         if (verbosity > 0 && stat.conflicts % 20000 == 0)
+            stat.print();
+         if (!resolveConflict(confl))
             return lbool::False();
+         firstAfterConflict = true;
+         continue;
       }
 
-      if (reduce.run([&](CRef const ref)
-      {  removeClause(ref);}))
-         checkGarbage();
-   }
+      if (firstAfterConflict)
+      {
+         firstAfterConflict = false;
+         if (restart.shouldRestart() || exchange.isFinished() || !withinBudget())
+         {
+            cancelUntil(0);
+            return lbool::Undef();
+         }
 
-   Lit const next = branch.pickBranchLit();
-   if (next == Lit::Undef())
-   {
-      // Model found:
-      return lbool::True();
-   }
+         if (ig.decisionLevel() == 0)
+         {
+            if (!importClauses() || !simplify())
+               return lbool::False();
+         }
+
+         if (reduce.run([&](CRef const ref)
+         {  removeClause(ref);}))
+            checkGarbage();
+      }
+
+      Lit const next = branch.pickBranchLit();
+      if (next == Lit::Undef())
+      {
+         // Model found:
+         return lbool::True();
+      }
 
 // Increase decision level and enqueue 'next'
-   ig.newDecisionLevel();
-   uncheckedEnqueue(next, ig.decisionLevel());
-   ++stat.decisions;
-}
+      ig.newDecisionLevel();
+      uncheckedEnqueue(next, ig.decisionLevel());
+      ++stat.decisions;
+   }
 }
 
 // NOTE: assumptions passed in member-variable 'assumptions'.
 template <typename TemplateConfig>
 typename Solver<TemplateConfig>::lbool Solver<TemplateConfig>::solve()
 {
-LOG("Starts solving")
-if (!isOk())
-   return lbool::False();
-lbool status = lbool::Undef();
+   LOG("Starts solving")
+   if (!isOk())
+      return lbool::False();
+   lbool status = lbool::Undef();
 
-add_tmp.clear();
+   add_tmp.clear();
 
 // Search:
-while (status == lbool::Undef() && withinBudget() && !exchange.isFinished())
-{
+   while (status == lbool::Undef() && withinBudget() && !exchange.isFinished())
+   {
 LOG("Start")
-            assert(ig.decisionLevel() == 0);
-   branch.notifyRestart();
-   restart.notifyRestart();
-   analyze.notifyRestart();
+                                       assert(ig.decisionLevel() == 0);
+      branch.notifyRestart();
+      restart.notifyRestart();
+      analyze.notifyRestart();
 
-   importClauses();
-   if (!exchange.isOk() || !isOk() || !simplifyAll())
-      status = lbool::False();
-   else
-   {
-      ++stat.restarts;
-      status = search();
+      importClauses();
+      if (!exchange.isOk() || !isOk() || !simplifyAll())
+         status = lbool::False();
+      else
+      {
+         ++stat.restarts;
+         status = search();
+      }
    }
-}
 
-if (verbosity >= 1)
-   printf("c ===============================================================================\n");
+   if (verbosity >= 1)
+      printf("c ===============================================================================\n");
 
-if (status != lbool::Undef() && exchange.setFinished(status))
-{
-   LOG("Solver won")
-   if (status == lbool::False())
+   if (status != lbool::Undef() && exchange.setFinished(status))
    {
-      if (!exchange.isOk() && verbosity > -1)
-         std::cout << "c solved through import\n";
+      LOG("Solver won")
+      if (status == lbool::False())
+      {
+         if (!exchange.isOk() && verbosity > -1)
+            std::cout << "c solved through import\n";
 
-      drat.addEmptyClause();
-      drat.flush();
-   }
-} else
-   status = lbool::Undef();
-LOG("Ends solving")
-return status;
+         drat.addEmptyClause();
+         drat.flush();
+      }
+   } else
+      status = lbool::Undef();
+   LOG("Ends solving")
+   return status;
 }
 
 template <typename TemplateConfig>
 void Solver<TemplateConfig>::printFinalStats() const
 {
-stat.printFinal();
+   stat.printFinal();
 }
 
 //=================================================================================================
@@ -773,34 +774,34 @@ template <typename TemplateConfig>
 void Solver<TemplateConfig>::relocAll(typename TemplateConfig::Database& to)
 {
 // All watchers:
-propEngine.relocAll(to);
+   propEngine.relocAll(to);
 
 // All reasons:
 //
-for (int i = 0; i < ig.nAssigns(); i++)
-{
-   Var const v = ig.getTrailLit(i).var();
-   CRef const cr = ig.reason(v);
-   if (cr != CRef_Undef && (ca[cr].reloced() || ig.locked(cr)))
-      ca.reloc(ig.reason(v), to);
-}
+   for (int i = 0; i < ig.nAssigns(); i++)
+   {
+      Var const v = ig.getTrailLit(i).var();
+      CRef const cr = ig.reason(v);
+      if (cr != CRef_Undef && (ca[cr].reloced() || ig.locked(cr)))
+         ca.reloc(ig.reason(v), to);
+   }
 
 // All learnt:
 //
-reduce.relocAll(to);
+   reduce.relocAll(to);
 
 // All original:
 //
-int i, j;
-for (i = j = 0; i < clauses.size(); i++)
-   if (ca[clauses[i]].mark() != 1)
-   {
-      ca.reloc(clauses[i], to);
-      clauses[j++] = clauses[i];
-   }
+   int i, j;
+   for (i = j = 0; i < clauses.size(); i++)
+      if (ca[clauses[i]].mark() != 1)
+      {
+         ca.reloc(clauses[i], to);
+         clauses[j++] = clauses[i];
+      }
 
-exchange.relocAll(to);
-clauses.shrink(i - j);
+   exchange.relocAll(to);
+   clauses.shrink(i - j);
 }
 
 template <typename TemplateConfig>
@@ -808,12 +809,12 @@ void Solver<TemplateConfig>::garbageCollect()
 {
 // Initialize the next region to a size corresponding to the estimated utilization degree. This
 // is not precise but should avoid some unnecessary reallocations for the new region:
-ClauseAllocator to(ca.size() - ca.wasted());
+   ClauseAllocator to(ca.size() - ca.wasted());
 
-relocAll(to);
-if (verbosity >= 2)
-   printf("c |  Garbage collection:   %12d bytes => %12d bytes             |\n",
-          ca.size() * ClauseAllocator::Unit_Size, to.size() * ClauseAllocator::Unit_Size);
-to.moveTo(ca);
+   relocAll(to);
+   if (verbosity >= 2)
+      printf("c |  Garbage collection:   %12d bytes => %12d bytes             |\n",
+             ca.size() * ClauseAllocator::Unit_Size, to.size() * ClauseAllocator::Unit_Size);
+   to.moveTo(ca);
 }
 }

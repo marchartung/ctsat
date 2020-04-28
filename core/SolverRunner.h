@@ -101,7 +101,6 @@ struct ThreadData
    SatInstance const & inst;
    Connector & conn;
    Statistic * stat;
-   SolverConfig config;
 
    ThreadData(ThreadData && in)
          : threadId(in.threadId),
@@ -109,8 +108,7 @@ struct ThreadData
            pthreadId(in.pthreadId),
            inst(in.inst),
            conn(in.conn),
-           stat(in.stat),
-           config(in.config)
+           stat(in.stat)
    {
 
    }
@@ -121,8 +119,7 @@ struct ThreadData
            pthreadId(),
            inst(inst),
            conn(conn),
-           stat(nullptr),
-           config(SolverConfig::getThreadConfig(threadId, rank))
+           stat(nullptr)
    {
    }
 };
@@ -250,23 +247,19 @@ class SolverRunner
    {
       switch (config.analyze)
       {
-         case AnalyzeHeuristic::FUIP:
-            LOG("Using fuip")
-            return runExchange<Connector, Database, Branch, Restart, Reduce, Propagate,
-                  FirstUipAnalyze<Propagate> >(config, threadData);
-
-         case AnalyzeHeuristic::MUIP:
-            LOG("Using muip")
-            return runExchange<Connector, Database, Branch, Restart, Reduce, Propagate,
-                  MultiUipAnalyze<Propagate> >(config, threadData);
-
-         case AnalyzeHeuristic::LEVELAWARE:
+//         case AnalyzeHeuristic::FUIP:
+//            LOG("Using fuip")
+//            return runExchange<Connector, Database, Branch, Restart, Reduce, Propagate,
+//                  FirstUipAnalyze<Propagate> >(config, threadData);
+//
+//         case AnalyzeHeuristic::MUIP:
+//            LOG("Using muip")
+//            return runExchange<Connector, Database, Branch, Restart, Reduce, Propagate,
+//                  MultiUipAnalyze<Propagate> >(config, threadData);
+         default:
             LOG("Using laa")
             return runExchange<Connector, Database, Branch, Restart, Reduce, Propagate,
                   LevelAwareAnalyze<Propagate> >(config, threadData);
-         default:
-            assert(false);
-            return lbool::Undef();
 
       }
 

@@ -36,7 +36,7 @@
 #ifndef MPI_MPIHELPER_H_
 #define MPI_MPIHELPER_H_
 
-#include <mpi/mpi.h> // FIXME
+#include <mpi.h>
 #include <iostream>
 namespace ctsat
 {

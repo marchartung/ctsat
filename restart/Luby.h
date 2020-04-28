@@ -56,8 +56,8 @@ class LubyRestart
  private:
    int nConflictsToRestart;
    int curr_restarts;
-   int restart_first;
-   double restart_inc;
+   int base_factor;
+   double inc_factor;
    Statistic & stat;
 
    inline static double luby(double y, int x)
@@ -83,15 +83,15 @@ class LubyRestart
 inline LubyRestart::LubyRestart(const SolverConfig& config, SolveMode& smode, Statistic& stat)
       : nConflictsToRestart(0),
         curr_restarts(0),
-        restart_first(config.restart_first),
-        restart_inc(config.restart_inc),
+        base_factor(config.luby_base_factor),
+        inc_factor(config.luby_inc_factor),
         stat(stat)
 {
 }
 
 inline void LubyRestart::notifyRestart()
 {
-   nConflictsToRestart = luby(restart_inc, curr_restarts) * restart_first;
+   nConflictsToRestart = luby(inc_factor, curr_restarts) * base_factor;
    ++curr_restarts;
 }
 

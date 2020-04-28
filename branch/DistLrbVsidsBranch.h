@@ -68,12 +68,14 @@ class DistLrbVsidsBranch
    bool switched;
    bool DISTANCE;
    bool VSIDS;
+   int init_vsids_var_decay_timer;
    int vsids_var_decay_timer;
    double step_size;
    double step_size_dec;
    double min_step_size;
 
    double vsids_var_decay;
+   double const vsids_max_var_decay;
    double vsids_var_inc;          // Amount to bump next variable with.
 
    double dist_var_decay;
@@ -396,11 +398,13 @@ inline DistLrbVsidsBranch<Database>::DistLrbVsidsBranch(
         switched(false),
         DISTANCE(true),
         VSIDS(true),
+        init_vsids_var_decay_timer(args.config.vsids_var_decay_timer),
         vsids_var_decay_timer(args.config.vsids_var_decay_timer),
         step_size(args.config.step_size),
         step_size_dec(args.config.step_size_dec),
         min_step_size(args.config.min_step_size),
         vsids_var_decay(args.config.vsids_var_decay),
+        vsids_max_var_decay(args.config.vsids_max_var_decay),
         vsids_var_inc(1),
         dist_var_decay(args.config.dist_var_decay),
         var_iLevel_inc(1),
@@ -408,7 +412,7 @@ inline DistLrbVsidsBranch<Database>::DistLrbVsidsBranch(
         order_heap_CHB(VarOrderLt(activity_CHB)),
         order_heap_VSIDS(VarOrderLt(activity_VSIDS)),
         order_heap_distance(VarOrderLt(activity_distance)),
-        switchTimer(args.config.timeToBranchSwitch),
+        switchTimer(args.config.secToSwitchHeuristic),
         smode(args.smode),
         rand(args.rand),
         stat(args.stat),
@@ -424,8 +428,11 @@ inline void DistLrbVsidsBranch<Database>::notifyConflictFound1(CRef const confl)
 {
    if (VSIDS)
    {
-      if (--vsids_var_decay_timer == 0 && vsids_var_decay < 0.95)
-         vsids_var_decay_timer = 5000, vsids_var_decay += 0.01;
+      if (--vsids_var_decay_timer == 0 && vsids_var_decay < vsids_max_var_decay)
+      {
+         vsids_var_decay_timer = init_vsids_var_decay_timer;
+         vsids_var_decay = std::min(vsids_var_decay + 0.01,vsids_max_var_decay);
+      }
    } else if (step_size > min_step_size)
       step_size -= step_size_dec;
 }

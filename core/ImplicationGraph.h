@@ -244,11 +244,9 @@ inline int ImplicationGraph<Database>::visitImplications(
    do
    {
       assert(cref != Database::npos());  // (otherwise should be UIP)
-      void * debugP = &ca[cref];
       if (clauseVisited(p, cref))
       {
          Clause & c = ca[cref];
-         assert(debugP==&c); // FIXME
          // For binary clauses, we don't rearrange literals in propagate(), so check and make sure the first is an implied lit.
          if (p != Lit::Undef() && c.size() == 2 && value(c[0]).isFalse())
          {

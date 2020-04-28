@@ -37,10 +37,9 @@
 using namespace ctsat;
 
 const char * _logger = "LOGGER";
-BoolOption Inputs::log(_logger, "logging",
-                                      "Logs events of each solver", false);
+BoolOption Inputs::log(_logger, "logging", "Logs events of each solver", false);
 StringOption Inputs::logDirectory(_logger, "log-dir", "Directory in which log file will be created",
-                             "");
+                                  "");
 
 const char * _analyze = "ANALYZE";
 StringOption Inputs::analyze(_analyze, "analyze", "possible options are 'fuip', 'muip' or 'laa'",
@@ -50,7 +49,7 @@ BoolOption Inputs::LAA_alwaySwap(
       _analyze,
       "laa-always-swap",
       "If an additional learnt clause is asserting and smaller than the fuip clause, they will be used",
-      false);
+      true);
 
 IntOption Inputs::LAA_levelDiffEnforce(
       _analyze,
@@ -70,23 +69,19 @@ IntOption Inputs::LAA_levelQueueSz(
 
 const char * _mpi = "MPI - has only effect when mpi build is used";
 BoolOption Inputs::mpiAutoThreads(
-      _mpi,
-      "mpi-auto-threads",
-      "Automatically chooses different thread numbers for different mpi ranks",
-      false);
+      _mpi, "mpi-auto-threads",
+      "Automatically chooses different thread numbers for different mpi ranks", false);
 
 BoolOption Inputs::mpiHashClauseFilter(
-      _mpi,
-      "mpi-hash-filter",
-      "Uses a hash filter to exclude already seen clauses from being imported",
-      false);
+      _mpi, "mpi-hash-filter",
+      "Uses a hash filter to exclude already seen clauses from being imported", true);
 
 DoubleOption Inputs::mpiMbBufferSize(_mpi, "mpi-buffer-sz",
-                                     "Number of MB allocated for send buffers", 0.1,
+                                     "Number of MB allocated for send buffers", 0.5,
                                      DoubleRange(0.1, true, HUGE_VAL, false));
 
 DoubleOption Inputs::mpi_send_interval(_mpi, "mpi-interval", "Seconds between mpi send operations",
-                                       0.5, DoubleRange(0.0, true, HUGE_VAL, false));
+                                       0.05, DoubleRange(0.0, true, HUGE_VAL, false));
 
 IntOption Inputs::nMpiPartitions(
       _mpi,
@@ -101,10 +96,13 @@ StringOption Inputs::exchange(_parallel, "exchange", "possible options are 'none
 IntOption Inputs::nThreads(_parallel, "nthreads", "number of threads to run in parallel", 2,
                            IntRange(1, 512));
 DoubleOption Inputs::mbExchangeBufferPerThread(
-      _parallel, "mb-exchange", "number of mega bytes per thread to use for clause exchange buffer", 0.01,
-      DoubleRange(0.01, true, HUGE_VAL, false));
+      _parallel, "mb-exchange", "number of mega bytes per thread to use for clause exchange buffer",
+      1.0, DoubleRange(0.01, true, HUGE_VAL, false));
 IntOption Inputs::max_export_lbd(_parallel, "exp-lbd",
                                  "Maximal allowed lbd of a clause to be exported", 5,
+                                 IntRange(1, 10));
+IntOption Inputs::max_import_lbd(_parallel, "exp-lbd",
+                                 "Maximal allowed lbd of a clause to be imported", 5,
                                  IntRange(1, 10));
 
 IntOption Inputs::max_export_sz(_parallel, "exp-sz",
@@ -118,10 +116,9 @@ BoolOption Inputs::minimize_import_cl(_parallel, "min-import-cl",
                                       "Allows minimization of imported clauses", false);
 
 BoolOption Inputs::onlyExportWhenMin(_parallel, "min-export-cl",
-                                      "Only export clauses when tried to vifify them", false);
+                                     "Only export clauses when tried to vifify them", false);
 
-BoolOption Inputs::pinSolver(_parallel, "pin-solvers",
-                                      "Pins solvers to cores", false);
+BoolOption Inputs::pinSolver(_parallel, "pin-solvers", "Pins solvers to cores", false);
 
 const char * _bra = "BRANCH";
 StringOption Inputs::branch(_bra, "branch",
@@ -133,11 +130,17 @@ DoubleOption Inputs::step_size_dec(_bra, "step-size-dec", "Step size decrement",
                                    DoubleRange(0, false, 1, false));
 DoubleOption Inputs::min_step_size(_bra, "min-step-size", "Minimal step size", 0.06,
                                    DoubleRange(0, false, 1, false));
-DoubleOption Inputs::var_decay(_bra, "var-decay", "The variable activity decay factor", 0.80,
-                               DoubleRange(0, false, 1, false));
+DoubleOption Inputs::vsids_var_decay(_bra, "var-decay", "The variable activity decay factor", 0.80,
+                                     DoubleRange(0, false, 1, false));
+DoubleOption Inputs::vsids_max_var_decay(_bra, ",max-var-decay",
+                                         "The maximum variable activity decay factor", 0.95,
+                                         DoubleRange(0, false, 1, false));
 IntOption Inputs::phase_saving(_bra, "phase-saving",
                                "Controls the level of phase saving (0=none, 1=limited, 2=full)", 2,
                                IntRange(0, 2));
+IntOption Inputs::vsids_var_decay_timer(
+      _bra, "phase-saving", "Defines after how many conflicts the variable decay factor will be increased", 5000,
+      IntRange(1000, INT32_MAX));
 
 BoolOption Inputs::rnd_init_act(_bra, "rnd-activ", "Randomize the initial activity", false);
 BoolOption Inputs::rnd_polarity(_bra, "rnd-pol", "Randomize the initial var polarity", false);
@@ -166,9 +169,9 @@ BoolOption Inputs::useVivification(_min, "vivi",
 const char * _rest = "RESTART";
 StringOption Inputs::restart(_rest, "restart", "possible options are 'mixed', 'luby' or 'glucose'",
                              "mixed");
-IntOption Inputs::restart_first(_rest, "rfirst", "The base restart interval", 100,
+IntOption Inputs::luby_base_factor(_rest, "luby-base", "The base restart interval for luby restarts", 100,
                                 IntRange(1, INT32_MAX));
-DoubleOption Inputs::restart_inc(_rest, "rinc", "Restart interval increase factor", 2,
+DoubleOption Inputs::luby_inc_factor(_rest, "rinc", "Restart interval increase factor", 2,
                                  DoubleRange(1, false, HUGE_VAL, false));
 
 const char* _back = "BACKTRACK";
@@ -219,6 +222,8 @@ DoubleOption Inputs::simp_garbage_frac(
 const char* _main = "MAIN";
 IntOption Inputs::verb(_main, "verb", "Verbosity level (0=silent, 1=some, 2=more).", 1,
                        IntRange(0, 2));
+IntOption Inputs::secToSwitchHeuristic(_main, "sec-heu-switch", "Seconds until the solver switches heuristics", 2500,
+                       IntRange(10, INT32_MAX));
 
 DoubleOption Inputs::print_interval(_main, "print-interval",
                                     "Elapsed time between solver state prints", 5.0,

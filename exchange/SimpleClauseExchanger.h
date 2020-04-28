@@ -83,6 +83,7 @@ class SimpleClauseExchanger : public NoClauseExchanger<Database, Connector, Prop
  protected:
    bool const minimize_import_cl;
    int max_export_lbd;
+   int max_import_lbd;
    int max_export_sz;
    const unsigned id;
    size_type curReadPos;
@@ -141,7 +142,7 @@ void SimpleClauseExchanger<Database, Connector, PropEngine>::fetchClauses()
    while (Super::conn.isValid(curReadPos))
    {
       ExClause const & importCl = Super::conn.template get<ExClause>(curReadPos);
-      if (importCl.id != id && !prepClause(tmpClause, importCl))
+      if (importCl.id != id && importCl.lbd <= max_import_lbd && !prepClause(tmpClause, importCl))
       {
          if (tmpClause.size() < 2)
          {
@@ -224,6 +225,7 @@ inline SimpleClauseExchanger<Database, Connector, PropEngine>::SimpleClauseExcha
       : Super(config, stat, db, ig, conn, propEngine),
         minimize_import_cl(config.minimize_import_cl),
         max_export_lbd(config.max_export_lbd),
+        max_import_lbd(config.max_import_lbd),
         max_export_sz(config.max_export_sz),
         id(conn.getUniqueId()),
         curReadPos(Connector::startPos()),

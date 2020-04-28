@@ -125,25 +125,6 @@ class ParallelSolverRunner : public SolverRunner
       }
    }
 
-   static void runLoop(ConnType & conn, std::vector<TData> & tdata, SatInstance & inst)
-   {
-      int const verb = Inputs::verb;
-      conn.waitInitialize(tdata.size());
-      inst.ca.clear(true);
-      Timer printTimer(Inputs::print_interval);
-      while (conn.nRunningThreads() > 0 && !conn.isFinished())
-      {
-         conn.sleep();
-         if (verb > 0 && printTimer.isOver())
-         {
-            printStats(tdata);
-            printTimer.reset();
-         }
-      }
-
-      printStats(tdata);
-   }
-
    static lbool finalizeResult(ConnType & conn, SatInstance & inst)
    {
       lbool ret = conn.getResult();
@@ -170,6 +151,25 @@ class ParallelSolverRunner : public SolverRunner
       return ret;
    }
 
+   static void runLoop(ConnType & conn, std::vector<TData> & tdata, SatInstance & inst)
+   {
+      int const verb = Inputs::verb;
+      conn.waitInitialize(tdata.size());
+      inst.ca.clear(true);
+      Timer printTimer(Inputs::print_interval);
+      while (conn.nRunningThreads() > 0 && !conn.isFinished())
+      {
+         conn.sleep();
+         if (verb > 0 && printTimer.isOver())
+         {
+            printStats(tdata);
+            printTimer.reset();
+         }
+      }
+
+      printStats(tdata);
+   }
+
    static void joinThreads(ConnType & conn, std::vector<TData> & tdata)
    {
       conn.allowMemFree();
@@ -191,7 +191,7 @@ class ParallelSolverRunner : public SolverRunner
       ThreadData<ConnType> & data = *reinterpret_cast<ThreadData<ConnType>*>(v);
       LOG_INIT(data.rank)
       LOG("Thread " + std::to_string(pthread_self()) + " started")
-      SolverRunner::runDatabase<ConnType>(data.config, v);
+      SolverRunner::runDatabase<ConnType>(SolverConfig::getThreadConfig(data.threadId), v);
       LOG("Thread finished")
       LOG_DEINIT
       pthread_exit(NULL);

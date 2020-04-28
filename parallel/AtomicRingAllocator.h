@@ -92,6 +92,11 @@ class AtomicRingAllocator
 
    bool isValid(size_type const pos) const;
 
+   value_type getLength(size_type const pos) const
+   {
+      return data[pos];
+   }
+
    // only call when isValid is true:
    size_type getNextPos(size_type const pos);
 
@@ -200,30 +205,32 @@ class AtomicRingAllocator
    size_type getPosSafe(size_type const pos) const;
 };
 
-AtomicRingAllocator::size_type AtomicRingAllocator::getEndPos()
+inline AtomicRingAllocator::size_type AtomicRingAllocator::getEndPos()
 {
    return writeEndPos;
 }
 
 bool AtomicRingAllocator::isValid(size_type const pos) const
 {
-   return data[getPosSafe(pos)] != -1;
+   return data[getPosSafe(pos)] > 0;
 }
 
 inline AtomicRingAllocator::size_type AtomicRingAllocator::getPosSafe(size_type const pos) const
 {
    assert(pos < cap);
    size_type res = pos;
-   if (data[pos].load(std::memory_order_acquire) == 0)
+   if (data[res].load() == 0)
       res = 0;
+   assert(res < cap);
    return res;
 }
 
-AtomicRingAllocator::size_type AtomicRingAllocator::getNextPos(size_type const pos)
+inline AtomicRingAllocator::size_type AtomicRingAllocator::getNextPos(size_type const pos)
 {
    assert(isValid(pos));
 
    size_type res = getPosSafe(pos) + data[pos].load(std::memory_order_relaxed);
+   assert(res < cap);
    assert(pos != res);
    blocker.stepped(pos, res);
    return res;
@@ -286,20 +293,23 @@ inline bool AtomicRingAllocator::allocConstruct(uint64_t const nBytes, Args ... 
    do
    {
       expected = false;
-   } while (!writeLocked.compare_exchange_weak(expected, true));  // TODO maybe switch to something without thread starvation
+   } while (!writeLocked.compare_exchange_weak(expected, true));
    assert(writeLocked);
 
    size_type start = writeEndPos;
    assert(data[start] == -1);
-   if (!blocker.safeToTouch(start + addSize))
+   size_type realEndPos = start + addSize;
+   if(realEndPos >= cap)
+      realEndPos = addSize;
+   if (!blocker.safeToTouch(realEndPos))
    {
       writeLocked.store(false, std::memory_order_seq_cst);
       return false;
    }
    if (cap <= start + addSize)
    {
-      data[0].store(-1, std::memory_order_relaxed);
-      data[start].store(0, std::memory_order_release);
+      data[0].store(-1, std::memory_order_seq_cst);
+      data[start].store(0, std::memory_order_seq_cst);
       start = 0;
    }
    data[start + addSize].store(-1, std::memory_order_relaxed);

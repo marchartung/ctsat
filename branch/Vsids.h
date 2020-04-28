@@ -45,7 +45,9 @@ class VsidsBranch : public Branch<Database>
    Lit pickBranchLit();
 
  private:
-   int vsids_var_decay_timer;
+   int const init_var_decay_timer;
+   int var_decay_timer;
+   double const max_var_decay;
    double var_decay;
    double var_inc;          // Amount to bump next variable with.
 
@@ -88,7 +90,9 @@ inline void VsidsBranch<Database>::varBumpActivity(Var v, double mult)
 template <typename Database>
 inline VsidsBranch<Database>::VsidsBranch(typename Super::BranchInputArgs args)
         : Super(args),
-        vsids_var_decay_timer(args.config.vsids_var_decay_timer),
+          init_var_decay_timer(args.config.vsids_var_decay_timer),
+        var_decay_timer(args.config.vsids_var_decay_timer),
+        max_var_decay(args.config.vsids_max_var_decay),
         var_decay(args.config.vsids_var_decay),
         var_inc(1)
 {
@@ -97,8 +101,11 @@ inline VsidsBranch<Database>::VsidsBranch(typename Super::BranchInputArgs args)
 template <typename Database>
 inline void VsidsBranch<Database>::notifyConflictFound1(CRef const confl)
 {
-   if (--vsids_var_decay_timer == 0 && var_decay < 0.95)
-      vsids_var_decay_timer = 5000, var_decay += 0.01;
+   if (--var_decay_timer == 0 && var_decay < max_var_decay)
+   {
+      var_decay_timer = init_var_decay_timer;
+      var_decay = std::min(var_decay + 0.01, max_var_decay);
+   }
 }
 
 template <typename Database>
