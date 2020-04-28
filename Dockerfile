@@ -44,5 +44,4 @@ RUN eval `ssh-agent -s` && ssh-add ${SSHDIR}/id_rsa
 
 EXPOSE 22
 
-#CMD hordesat/hordesat
-#CMD supervised-scripts/mpi-run.sh
+CMD supervised-scripts/mpi-run.sh
