@@ -25,4 +25,4 @@ fi
 echo "Starting $${S3_BKT}/${COMP_S3_PROBLEM_PATH}"
 
   # REPLACE THE FOLLOWING LINE WITH YOUR PARTICULAR SOLVER
-time /ctsat/bin/ctsat_parallel_release -nthreads=${NUM_PROCESSES} supervised-scripts/test.cnf
+time /ctsat/parallel/ctsat_parallel_release -nthreads=${NUM_PROCESSES}  supervised-scripts/test.cnf
