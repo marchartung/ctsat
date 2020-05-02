@@ -59,7 +59,7 @@ wait_for_nodes () {
   cat combined_hostfile
 
   # REPLACE THE FOLLOWING LINE WITH YOUR PARTICULAR SOLVER
-  time mpirun --mca btl_tcp_if_include eth0 --allow-run-as-root -np ${AWS_BATCH_JOB_NUM_NODES} --hostfile combined_hostfile /ctsat/bin/ctsat_mpi  -nthreads=${NUM_PROCESSES} -mpi-auto-threads supervised-scripts/test.cnf
+  time mpirun --mca btl_tcp_if_include eth0 --allow-run-as-root -np ${AWS_BATCH_JOB_NUM_NODES} --hostfile combined_hostfile /ctsat/bin/ctsat_mpi_release -mpi-auto-threads supervised-scripts/test.cnf
 }
 
 # Fetch and run a script
