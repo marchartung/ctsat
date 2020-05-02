@@ -4,16 +4,16 @@ RUN apt-get update && apt-get install -y openssh-server git \
     unzip wget build-essential zlib1g-dev make iproute2 cmake \
     python python-pip openmpi-bin openmpi-common libopenmpi-dev iputils-ping
 
-RUN git clone https://github.com/marchartung/ctsat ctsat
+RUN git clone --single-branch --branch parallel https://github.com/marchartung/ctsat ctsat
 RUN cd ctsat && ./build_mpi.sh
 
 ADD * ctsat/
 
-ADD mpi-run.sh supervised-scripts/mpi-run.sh
+ADD run.sh supervised-scripts/run.sh
 ADD make_combined_hostfile.py supervised-scripts/make_combined_hostfile.py
 RUN cd ..
 
-RUN chmod 755 supervised-scripts/mpi-run.sh
+RUN chmod 755 supervised-scripts/run.sh
 
 
 RUN pip install supervisor awscli
@@ -44,4 +44,4 @@ RUN eval `ssh-agent -s` && ssh-add ${SSHDIR}/id_rsa
 
 EXPOSE 22
 
-CMD supervised-scripts/mpi-run.sh
+CMD supervised-scripts/run.sh
