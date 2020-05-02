@@ -59,7 +59,7 @@ wait_for_nodes () {
   cat combined_hostfile
 
   # REPLACE THE FOLLOWING LINE WITH YOUR PARTICULAR SOLVER
-  time /ctsat/bin/ctsat_parallel_release supervised-scripts/test.cnf
+  time /ctsat/bin/ctsat_parallel_release -nthreads=${NUM_PROCESSES} supervised-scripts/test.cnf
 }
 
 # Fetch and run a script
