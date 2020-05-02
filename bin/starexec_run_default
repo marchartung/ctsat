@@ -1,3 +1,0 @@
-#!/bin/sh 
-
-./ctsat_release $1 -drat-file=$2/proof.out
