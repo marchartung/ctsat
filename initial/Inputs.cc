@@ -93,7 +93,7 @@ const char * _parallel = "PARALLEL - no effect when serial solver is used -";
 StringOption Inputs::exchange(_parallel, "exchange", "possible options are 'none' or 'importbuff'",
                               "importbuff");
 
-IntOption Inputs::nThreads(_parallel, "nthreads", "number of threads to run in parallel", 20,
+IntOption Inputs::nThreads(_parallel, "nthreads", "number of threads to run in parallel", 16,
                            IntRange(1, 512));
 DoubleOption Inputs::mbExchangeBufferPerThread(
       _parallel, "mb-exchange", "number of mega bytes per thread to use for clause exchange buffer",
@@ -118,7 +118,7 @@ BoolOption Inputs::minimize_import_cl(_parallel, "min-import-cl",
 BoolOption Inputs::onlyExportWhenMin(_parallel, "min-export-cl",
                                      "Only export clauses when tried to vifify them", false);
 
-BoolOption Inputs::pinSolver(_parallel, "pin-solvers", "Pins solvers to cores", true);
+BoolOption Inputs::pinSolver(_parallel, "pin-solvers", "Pins solvers to cores", false);
 
 const char * _bra = "BRANCH";
 StringOption Inputs::branch(_bra, "branch",
@@ -224,7 +224,7 @@ DoubleOption Inputs::simp_garbage_frac(
 const char* _main = "MAIN";
 IntOption Inputs::verb(_main, "verb", "Verbosity level (0=silent, 1=some, 2=more).", 1,
                        IntRange(0, 2));
-IntOption Inputs::secToSwitchHeuristic(_main, "sec-heu-switch", "Seconds until the solver switches heuristics", 2500,
+IntOption Inputs::secToSwitchHeuristic(_main, "sec-heu-switch", "Seconds until the solver switches heuristics", 4000,
                        IntRange(10, INT32_MAX));
 
 DoubleOption Inputs::print_interval(_main, "print-interval",
