@@ -125,7 +125,7 @@ class Solver
    lbool solve();   // Search without assumptions.
    bool okay() const;   // FALSE means solver is in a conflicting state
 
-   void setModel(vec<lbool> & model);
+   void setModel(vec<lbool> & model, vec<bool> const & isDecisionVar);
    int nAssigns() const;   // The current number of assigned literals.
    int nClauses() const;   // The current number of original clauses.
    int nLearnts() const;   // The current number of learnt clauses.
@@ -192,7 +192,7 @@ class Solver
    Solver(
           SolverConfig const & config,
           typename TemplateConfig::Connector & connector,
-          vec<lbool> const & model,
+          vec<bool> const & decisionVars,
           Database && db,
           vec<CRef> && clauses,
           DratPrint<Lit> && drat);
@@ -201,7 +201,7 @@ class Solver
    Solver(
           SolverConfig const & config,
           typename TemplateConfig::Connector & connector,
-          vec<decltype(SatInstance::ca)::lbool> const & model,
+          vec<bool> const & decisionVars,
           decltype(SatInstance::ca) const& db,
           vec<decltype(SatInstance::ca)::CRef> const & clauses);
 
@@ -263,7 +263,7 @@ class Solver
    void clauseUsedInConflict(CRef const ref);
    void clauseCreatedInConflict(vec<Lit> const & c);
 
-   CRef addLearnt(LearntClause<Database> const & lc);
+   CRef addLearnt(LearntClause<Database> const & lc, bool const additional = false);
 
    lbool search();   // Search for a given number of conflicts.
    void removeSatisfied(vec<CRef>& cs);   // Shrink 'cs' to contain only non-satisfied clauses.
@@ -278,12 +278,14 @@ class Solver
    bool removed(CRef cr);
 
    void attachClauses();
-   template <typename bool_type>
-   void newVars(vec<bool_type> const & model)
+
+   bool repropagateCurrentSolution();
+
+   void newVars(vec<bool> const & decisionVars)
    {
       assert(ig.nVars() == 0);
-      for (int i = 0; i < model.size(); ++i)
-         newVar(model[i].isUndef());
+      for (int i = 0; i < decisionVars.size(); ++i)
+         newVar(decisionVars[i]);
    }
 
    int getBacktrackLevel(int const highestLevel, int const assertingLevel);

@@ -1,5 +1,5 @@
 EXEC      = ctsat_parallel
-DEPDIR    = mtl utils core initial simp
+DEPDIR    = mtl utils core initial
 MROOT     = ../
 
 LFLAGS    += -pthread

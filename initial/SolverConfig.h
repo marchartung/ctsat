@@ -313,8 +313,7 @@ class SolverConfig
    double garbage_frac;
    double rnd_seed;
 
-   bool drup;
-   std::string drup_file;
+   std::string drat_file;
    int verbosity;
    int secToSwitchHeuristic;
 
@@ -342,9 +341,8 @@ class SolverConfig
       if (num > 2)
       {
          res.vsids_var_decay_timer = std::max((num / 2) * 2000 + 5000, 10000);
-         num %= 2;
       }
-      switch (num)
+      switch (num%2)
       {
          case 0:
             res.branch = BranchHeuristic::VSIDS;
@@ -401,7 +399,8 @@ class SolverConfig
       res.verbosity = -1;
       res.rnd_active = true;
       res.rnd_seed += 9919.4853094755497L * (threadId + seedAdd);
-
+      res.LAA_alwaySwap = true;
+      res.LAA_levelDiffEnforce = -1;
       if (threadId > 1)
       {
          res.initialSolver = false;
@@ -481,7 +480,7 @@ class SolverConfig
 
            eliminate(true),
            useVivification(Inputs::useVivification),
-           remove_satisfied(true),
+           remove_satisfied(Inputs::remove_satisfied),
            ccmin_mode(Inputs::ccmin_mode),
            maxEntendedBinaryResolutionSz(Inputs::maxEntendedBinaryResolutionSz),
            maxFullImplicationMinLbd(Inputs::maxFullImplicationMinLbd),
@@ -498,8 +497,7 @@ class SolverConfig
 
            garbage_frac(Inputs::garbage_frac),
            rnd_seed(Inputs::random_seed),
-           drup(static_cast<bool>(Inputs::drup)),
-           drup_file(static_cast<std::string>(Inputs::drup_file)),
+           drat_file(static_cast<std::string>(Inputs::drat_file)),
            verbosity(Inputs::verb),
            secToSwitchHeuristic(Inputs::secToSwitchHeuristic),
            conflict_budget(Inputs::conflict_budget),

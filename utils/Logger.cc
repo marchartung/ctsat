@@ -39,5 +39,5 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #pragma message "Building logger"
 thread_local ctsat::Logger ctsat::Logger::instance;
 #else
-#pragma message "no logger build. Enable with '-DLOG_CTSAT_ENABLE', if so flag '-logging' is supported"
+//#pragma message "no logger build. Enable with '-DLOG_CTSAT_ENABLE', if so flag '-logging' is supported"
 #endif

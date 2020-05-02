@@ -190,10 +190,10 @@ inline int MultiUipAnalyze<Propagate>::analyzeMuip(
       outC[0] = prevUip;
       outC[1] = ~ig.getTrailLit(resIdx);
 
-      lc.lbd = FUA::inConflictMinimize.run(outC, 2);  // 2 ... Uips will be skipped in implication check
+      lc.lbd = FUA::inConflictMinimize.run(outC, 2, false);  // 2 ... Uips will be skipped in implication check
       lc.isAsserting = outC.size() == 1 || outC[1].var() != ig.getTrailLit(resIdx).var();
       // prepare for asserting
-      if (lc.isAsserting && outC.size() > 1)
+      if (outC.size() > 1)
       {
          assert(ig.level(outC[1]) > 0);
          int max_i = 1;

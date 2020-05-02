@@ -49,13 +49,13 @@ BoolOption Inputs::LAA_alwaySwap(
       _analyze,
       "laa-always-swap",
       "If an additional learnt clause is asserting and smaller than the fuip clause, they will be used",
-      true);
+      false);
 
 IntOption Inputs::LAA_levelDiffEnforce(
       _analyze,
       "laa-level-diff",
       "when the average conflict level is this higher than the current, additional clauses will be learnt, -1 disables additional clause learning",
-      -1, IntRange(-1, INT32_MAX));
+      20, IntRange(-1, INT32_MAX));
 
 IntOption Inputs::LAA_numInitialConflicts(
       _analyze, "laa-initial-confl",
@@ -70,7 +70,7 @@ IntOption Inputs::LAA_levelQueueSz(
 const char * _mpi = "MPI - has only effect when mpi build is used";
 BoolOption Inputs::mpiAutoThreads(
       _mpi, "mpi-auto-threads",
-      "Automatically chooses different thread numbers for different mpi ranks", false);
+      "Automatically chooses different thread numbers for different mpi ranks", true);
 
 BoolOption Inputs::mpiHashClauseFilter(
       _mpi, "mpi-hash-filter",
@@ -93,7 +93,7 @@ const char * _parallel = "PARALLEL - no effect when serial solver is used -";
 StringOption Inputs::exchange(_parallel, "exchange", "possible options are 'none' or 'importbuff'",
                               "importbuff");
 
-IntOption Inputs::nThreads(_parallel, "nthreads", "number of threads to run in parallel", 2,
+IntOption Inputs::nThreads(_parallel, "nthreads", "number of threads to run in parallel", 20,
                            IntRange(1, 512));
 DoubleOption Inputs::mbExchangeBufferPerThread(
       _parallel, "mb-exchange", "number of mega bytes per thread to use for clause exchange buffer",
@@ -118,7 +118,7 @@ BoolOption Inputs::minimize_import_cl(_parallel, "min-import-cl",
 BoolOption Inputs::onlyExportWhenMin(_parallel, "min-export-cl",
                                      "Only export clauses when tried to vifify them", false);
 
-BoolOption Inputs::pinSolver(_parallel, "pin-solvers", "Pins solvers to cores", false);
+BoolOption Inputs::pinSolver(_parallel, "pin-solvers", "Pins solvers to cores", true);
 
 const char * _bra = "BRANCH";
 StringOption Inputs::branch(_bra, "branch",
@@ -165,6 +165,8 @@ IntOption Inputs::maxFullImplicationMinLbd(_min, "max-full-impl",
 
 BoolOption Inputs::useVivification(_min, "vivi",
                                    "Uses vivification during restart to minimize clauses", true);
+BoolOption Inputs::remove_satisfied(_min, "rm-satisfied",
+                                   "Removes satisfied clauses", true);
 
 const char * _rest = "RESTART";
 StringOption Inputs::restart(_rest, "restart", "possible options are 'mixed', 'luby' or 'glucose'",
@@ -226,7 +228,7 @@ IntOption Inputs::secToSwitchHeuristic(_main, "sec-heu-switch", "Seconds until t
                        IntRange(10, INT32_MAX));
 
 DoubleOption Inputs::print_interval(_main, "print-interval",
-                                    "Elapsed time between solver state prints", 5.0,
+                                    "Elapsed time between solver state prints", 10.0,
                                     DoubleRange(1.0, false, HUGE_VAL, false));
 const char* _budg = "RESOURCES";
 IntOption Inputs::conflict_budget(_budg, "budget-confl",
@@ -249,10 +251,9 @@ DoubleOption Inputs::garbage_frac(
       DoubleRange(0, false, HUGE_VAL, false));
 BoolOption Inputs::verifySat(_main, "verify-sat",
                              "On sat answere, the solution is checked against the dimacs file.",
-                             true);
-BoolOption Inputs::model(_main, "model", "Print the SAT model", false);
-BoolOption Inputs::drup(_main, "drup", "Generate DRUP UNSAT proof.", false);
-StringOption Inputs::drup_file(_main, "drup-file", "DRUP UNSAT proof ouput file.", "");
+                             false);
+BoolOption Inputs::model(_main, "model", "Print the SAT model", true);
+StringOption Inputs::drat_file(_main, "drat-file", "DRAT UNSAT proof ouput file.", "");
 
 int * Inputs::argc = nullptr;
 char *** Inputs::argv = nullptr;

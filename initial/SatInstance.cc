@@ -1,36 +1,36 @@
 /*****************************************************************************************
-CTSat -- Copyright (c) 2020, Marc Hartung
-                        Zuse Institute Berlin, Germany
+ CTSat -- Copyright (c) 2020, Marc Hartung
+ Zuse Institute Berlin, Germany
 
-Maple_LCM_Dist_Chrono -- Copyright (c) 2018, Vadim Ryvchin, Alexander Nadel
+ Maple_LCM_Dist_Chrono -- Copyright (c) 2018, Vadim Ryvchin, Alexander Nadel
 
-GlucoseNbSAT -- Copyright (c) 2016,Chu Min LI,Mao Luo and Fan Xiao
-                           Huazhong University of science and technology, China
-                           MIS, Univ. Picardie Jules Verne, France
+ GlucoseNbSAT -- Copyright (c) 2016,Chu Min LI,Mao Luo and Fan Xiao
+ Huazhong University of science and technology, China
+ MIS, Univ. Picardie Jules Verne, France
 
-MapleSAT -- Copyright (c) 2016, Jia Hui Liang, Vijay Ganesh
+ MapleSAT -- Copyright (c) 2016, Jia Hui Liang, Vijay Ganesh
 
-MiniSat -- Copyright (c) 2003-2006, Niklas Een, Niklas Sorensson
-           Copyright (c) 2007-2010  Niklas Sorensson
+ MiniSat -- Copyright (c) 2003-2006, Niklas Een, Niklas Sorensson
+ Copyright (c) 2007-2010  Niklas Sorensson
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the
-"Software"), to deal in the Software without restriction, including
-without limitation the rights to use, copy, modify, merge, publish,
-distribute, sublicense, and/or sell copies of the Software, and to
-permit persons to whom the Software is furnished to do so, subject to
-the following conditions:
+ Permission is hereby granted, free of charge, to any person obtaining a
+ copy of this software and associated documentation files (the
+ "Software"), to deal in the Software without restriction, including
+ without limitation the rights to use, copy, modify, merge, publish,
+ distribute, sublicense, and/or sell copies of the Software, and to
+ permit persons to whom the Software is furnished to do so, subject to
+ the following conditions:
 
-The above copyright notice and this permission notice shall be included
-in all copies or substantial portions of the Software.
+ The above copyright notice and this permission notice shall be included
+ in all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+ OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+ LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  **************************************************************************************************/
 
 #include "initial/SatInstance.h"
@@ -43,17 +43,20 @@ SatInstance::SatInstance()
 }
 
 SatInstance::SatInstance(SatInstance&& in)
+      : SatInstance()
 {
    *this = std::move(in);
 }
 
 SatInstance::SatInstance(
                          vec<lbool> && model,
+                         vec<bool> && isDecisionVar,
                          vec<CRef> && clauses,
                          Database&& db,
                          EliminatedClauseDatabase&& elimDb,
                          DratPrint<Lit> && drat)
       : model(std::move(model)),
+        isDecisionVar(std::move(isDecisionVar)),
         clauses(std::move(clauses)),
         ca(std::move(db)),
         elimDb(std::move(elimDb)),
@@ -68,7 +71,7 @@ SatInstance::SatInstance(void const * data, uint64_t const nBytes)
    // read in clauses from stream, catch max var, collect clause refs, set model to highest var
    Var maxVar = 0;
    CRef pos = 0;
-   model.growTo(1,lbool::True()); // we just set everthing to true, later this values won't be used
+   isDecisionVar.growTo(1, false);  // we just set everthing to true, later this values won't be used
    while (pos != Database::npos())
    {
       clauses.push(pos);
@@ -80,20 +83,23 @@ SatInstance::SatInstance(void const * data, uint64_t const nBytes)
          if (v > maxVar)
          {
             maxVar = v;
-            model.growTo(v + 1, lbool::True());
+            isDecisionVar.growTo(v + 1, false);
          }
-         model[v] = lbool::Undef();
+         isDecisionVar[v] = true;
       }
       pos = ca.next(pos);
    }
+   model.growTo(maxVar + 1, lbool::Undef());
 }
 
 SatInstance& SatInstance::operator =(SatInstance&& in)
 {
    model = std::move(in.model);
+   isDecisionVar = std::move(in.isDecisionVar);
    clauses = std::move(in.clauses);
    ca = std::move(in.ca);
    elimDb = std::move(in.elimDb);
+   drat = std::move(in.drat);
    return *this;
 }
 
@@ -110,8 +116,33 @@ bool SatInstance::isClean() const
    {
       Clause const & c = ca[clauses[i]];
       for (int j = 0; j < c.size(); ++j)
+      {
+         assert(isDecisionVar[c[j].var()]);
          if (!model[c[j].var()].isUndef())
             return false;
+      }
+   }
+   return true;
+}
+
+
+bool SatInstance::checkModel() const
+{
+   for(int i=0;i<clauses.size();++i)
+   {
+      Clause const & c = ca[clauses[i]];
+      bool isTrue = false;
+      for(int j=0;j<c.size();++j)
+      {
+         assert(!model[c[j].var()].isUndef());
+         if(c[j].sign() == model[c[j].var()].sign())
+         {
+            isTrue = true;
+            break;
+         }
+      }
+      if(!isTrue)
+         return false;
    }
    return true;
 }
@@ -131,22 +162,22 @@ bool SatInstance::operator==(SatInstance const & in) const
          if (c1[j] != c2[j])
             return false;
 
-         if(c1[j].var() >= model.size())
+         if (c1[j].var() >= model.size())
             return false;
-         if(c1[j].var() >= in.model.size())
+         if (c1[j].var() >= in.model.size())
             return false;
       }
    }
-   for(int i=0;i<clauses.size();++i)
+   for (int i = 0; i < clauses.size(); ++i)
    {
       bool found = false;
-      for(int j=0;j<in.clauses.size();++j)
-         if(clauses[i] == in.clauses[j])
+      for (int j = 0; j < in.clauses.size(); ++j)
+         if (clauses[i] == in.clauses[j])
          {
             found = true;
             break;
          }
-      if(!found)
+      if (!found)
          return false;
    }
 

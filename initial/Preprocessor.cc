@@ -66,7 +66,7 @@ Preprocessor::Preprocessor(SolverConfig const & config)
         occurs(ClauseDeleted(ca)),
         elim_heap(ElimLt(n_occ)),
         randEngine(config.rnd_seed),
-        drat(config.drup, config.drup_file),
+        drat(config.drat_file),
         ca(),
         ig(ca),
         branch(Branch<ClauseAllocator>::BranchInputArgs(config, smode, randEngine, stat, ca, ig)),
@@ -166,17 +166,17 @@ SatInstance Preprocessor::getInstance(std::string const & filename)
    // Force full cleanup (this is safe and desirable since it only happens once):
    garbageCollect(true);
    vec<lbool> model(ig.nVars(), lbool::Undef());
-   for (int i = 0; i < ig.nAssigns(); ++i)
+   vec<bool> isDecisionVar(ig.nVars(), false);
+   for (int i = 0; i < ig.nVars(); ++i)
    {
-      Var const v = ig.getTrailLit(i).var();
-      assert(model[v].isUndef());
+      Var const v = i;
       model[v] = ig.value(v);
-      if (eliminated[v])
-         --eliminated_vars;
-
+      isDecisionVar[v] = !eliminated[v] && ig.value(v).isUndef();
+      eliminated_vars -= eliminated[v] && !ig.value(v).isUndef();
    }
 
-   SatInstance res(std::move(model), std::move(clauses), std::move(ca), std::move(elimDb),
+
+   SatInstance res(std::move(model), std::move(isDecisionVar), std::move(clauses), std::move(ca), std::move(elimDb),
                    std::move(drat));
    assert(res.isClean());
    printf("c #########################  after Preprocessor  #######################\n");
@@ -596,7 +596,7 @@ bool Preprocessor::substitute(Var v, Lit x)
    return true;
 }
 
-inline int Preprocessor::nFreeVars() const
+int Preprocessor::nFreeVars() const
 {
    return (int) branch.nDecVars() - (ig.decisionLevel() == 0 ? ig.nAssigns() : ig.levelEnd(0));
 }
@@ -618,6 +618,8 @@ bool Preprocessor::removeRedundant(bool const removeFalseLits)
                   return setOk(false);
                clauses[j++] = clauses[i];
             }
+            else
+               removeClause(clauses[i]);
          }
       }
       clauses.shrink(i - j);
@@ -631,6 +633,8 @@ bool Preprocessor::removeRedundant(bool const removeFalseLits)
          Clause const & c = ca[clauses[i]];
          if (c.mark() == 0 && !ig.satisfied(c))
             clauses[j++] = clauses[i];
+         else
+            removeClause(clauses[i]);
       }
       clauses.shrink(i - j);
    }

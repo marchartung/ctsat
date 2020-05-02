@@ -1,7 +1,7 @@
 #!/bin/bash
 
 cd parallel
-make -j
+make r -j
 cd ..
-mkdir -p bin
-cp parallel/ctsat_parallel bin/
+
+cp parallel/ctsat_parallel_release bin/

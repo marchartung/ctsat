@@ -69,7 +69,7 @@ Solver<TemplateConfig>::Solver(
         smode(),
         randEngine(config.rnd_seed),
         stat(),
-        drat(config.drup, config.drup_file),
+        drat(),
         ca(),
         ig(ca),
         branch(
@@ -107,7 +107,7 @@ Solver<TemplateConfig>::Solver(
                                SolverConfig const & config,
                                typename TemplateConfig::Connector & connector,
                                SatInstance const & inst)
-      : Solver(config, connector, inst.model, inst.ca, inst.clauses)
+      : Solver(config, connector, inst.isDecisionVar, inst.ca, inst.clauses)
 {
 }
 
@@ -116,7 +116,7 @@ Solver<TemplateConfig>::Solver(
                                SolverConfig const & config,
                                typename TemplateConfig::Connector & connector,
                                SatInstance && inst)
-      : Solver(config, connector, inst.model, std::move(inst.ca), std::move(inst.clauses),
+      : Solver(config, connector, inst.isDecisionVar, std::move(inst.ca), std::move(inst.clauses),
                std::move(inst.drat))
 {
 }
@@ -132,14 +132,14 @@ template <typename TemplateConfig>
 Solver<TemplateConfig>::Solver(
                                SolverConfig const & config,
                                typename TemplateConfig::Connector & connector,
-                               vec<lbool> const & model,
+                               vec<bool> const & decisionVars,
                                Database && db,
                                vec<CRef> && clauses,
                                DratPrint<Lit> && drat)
       : Solver(config, connector)
 {
    this->drat = std::move(drat);
-   newVars(model);
+   newVars(decisionVars);
    this->clauses = std::move(clauses);
    ca = std::move(db);
    for (int i = 0; i < clauses.size(); ++i)
@@ -155,14 +155,14 @@ template <typename TemplateConfig>
 Solver<TemplateConfig>::Solver(
                                SolverConfig const & config,
                                typename TemplateConfig::Connector & connector,
-                               vec<decltype(SatInstance::ca)::lbool> const & model,
+                               vec<bool> const & decisionVars,
                                decltype(SatInstance::ca) const & db,
                                vec<decltype(SatInstance::ca)::CRef> const & clauses)
       : Solver(config, connector)
 {
    assert(this->clauses.size() == 0);
 
-   newVars(model);
+   newVars(decisionVars);
    for (int i = 0; i < clauses.size(); ++i)
    {
       CRef const ref = ca.alloc(db[clauses[i]], false);
@@ -186,15 +186,15 @@ bool Solver<TemplateConfig>::removed(CRef cr)
 }
 
 template <typename TemplateConfig>
-void Solver<TemplateConfig>::setModel(vec<lbool> & model)
+void Solver<TemplateConfig>::setModel(vec<lbool> & model, vec<bool> const & isDecisionVar)
 {
-LOG("setting model")
-                              assert(ig.nVars() <= model.size());
-   for (Var i = 0; i < ig.nVars(); ++i)
+   LOG("setting model");
+   assert(ig.nVars() <= model.size());
+   for (Var i = 0; i < ig.nAssigns(); ++i)
    {
-      lbool const val = ig.value(i);
-      if (!val.isUndef())
-         model[i] = val;
+      Var const v = ig.getTrailLit(i).var();
+      assert(isDecisionVar[v]);
+      model[v] = ig.value(v);
    }
 }
 
@@ -211,8 +211,8 @@ bool Solver<TemplateConfig>::simplifyClause(CRef const & cr)
       return false;
    else
    {
-      if(!propEngine.isAttached(cr))
-         std::cout << "is bad attached: " << propEngine.isBadAttached(cr) << "\n";
+//      if (!propEngine.isAttached(cr))  //TODO
+//         std::cout << "is bad attached: " << propEngine.isBadAttached(cr) << "\n";
       propEngine.detachClause(cr, true);
       if (vivification.run(c))
          drat.addClause(c);
@@ -378,6 +378,19 @@ inline typename Solver<TemplateConfig>::ConflictData Solver<TemplateConfig>::Fin
 }
 
 template <typename TemplateConfig>
+inline bool Solver<TemplateConfig>::repropagateCurrentSolution()
+{
+   vec<Lit> trail;
+   for (int i = 0; i < ig.nAssigns(); ++i)
+      trail.push(ig.getTrailLit(i));
+   ig.clearTrail();
+   for (int i = 0; i < trail.size(); ++i)
+      uncheckedEnqueue(trail[i]);
+   CRef const confl = propagate();
+   return confl == Database::npos();
+}
+
+template <typename TemplateConfig>
 inline void Solver<TemplateConfig>::clauseUsedInConflict(CRef const ref)
 {
    reduce.clauseUsedInConflict(ref);
@@ -434,7 +447,7 @@ bool Solver<TemplateConfig>::simplify()
 // Remove satisfied clauses:
    reduce.removeSatisfied([&](CRef const & ref)
    {  removeClause(ref);});
-   if (remove_satisfied)        // Can be turned off.
+   if (remove_satisfied)
       removeSatisfied(clauses);
    checkGarbage();
    branch.rebuildOrderHeap();
@@ -449,7 +462,7 @@ template <typename TemplateConfig>
 bool Solver<TemplateConfig>::importClauses()
 {
 LOG("Imports clauses")
-            assert(ig.decisionLevel() == 0);
+                                 assert(ig.decisionLevel() == 0);
    Lit u;
    bool attached;
    CRef ref;
@@ -542,7 +555,6 @@ inline bool Solver<TemplateConfig>::resolveConflict(CRef const confl)
    reduce.adjustOnConflict();
    branch.notifyConflictFound1(confl);
    restart.notifyConflictFound();
-   exchange.conflictFound();
 
    ConflictData const conflInfo = FindConflictLevel(confl);
 //   LOG("Conflict level " + std::to_string(conflInfo.nHighestLevel))
@@ -584,6 +596,7 @@ inline bool Solver<TemplateConfig>::resolveConflict(CRef const confl)
          }
          uncheckedEnqueue(prop.l, prop.level, prop.cr);
       }
+   exchange.conflictFound();
    LOG("Conflict resolved")
    return true;
 }
@@ -594,31 +607,25 @@ inline int Solver<TemplateConfig>::addLearntClauses()
    int assertingLevel = ig.decisionLevel(), lbd = std::numeric_limits<int>::max(), nAdded = 0;
    assert(analyze.hasLearntClause());
 
-   if (analyze.learntsMultipleClauses())
-      while (analyze.hasLearntClause())
-      {
-         LearntClause<Database> const & lc = analyze.getLearntClause();
-         CRef const cr = addLearnt(lc);
-         ++nAdded;
-         if (lc.isAsserting)
-         {
-            analyzeAssertions.emplace_back((lc.c.size() > 1) ? ig.level(lc.c[1]) : 0, lc.c[0], cr);
-            assertingLevel = std::min(assertingLevel, analyzeAssertions.back().level);
-            assert(
-                  analyzeAssertions.back().level > 0
-                     || analyzeAssertions.back().cr == Database::npos());
-            lbd = std::min(lbd, lc.lbd);
-         }
-      }
-   else
+   while (analyze.hasLearntClause())
    {
-      nAdded = 1;
       LearntClause<Database> const & lc = analyze.getLearntClause();
-      analyzeAssertions.emplace_back((lc.c.size() > 1) ? ig.level(lc.c[1]) : 0, lc.c[0],
-                                     addLearnt(lc));
-      assertingLevel = analyzeAssertions.back().level;
-      lbd = lc.lbd;
+      CRef const cr = addLearnt(lc, nAdded != 0);
+      ++nAdded;
+      if (lc.isAsserting)
+      {
+         assert(nAdded == 1);;
+         analyzeAssertions.emplace_back(((lc.c.size() > 1) ? ig.level(lc.c[1]) : 0), lc.c[0], cr);
+         for(int i=0;i<lc.c.size();++i)
+            assert(ig.level(lc.c[i]) > 0 || lc.c.size() == 1);
+         assertingLevel = std::min(assertingLevel, analyzeAssertions.back().level);
+         assert(
+               analyzeAssertions.back().level > 0
+                  || analyzeAssertions.back().cr == Database::npos());
+         lbd = std::min(lbd, lc.lbd);
+      }
    }
+
 //   LOG("Added " + std::to_string(nAdded) + " clauses")
    stat.nAdditionalLearnt += nAdded - 1;
    restart.clauseLearnt(lbd);  // only use heuristic on one clause
@@ -627,7 +634,8 @@ inline int Solver<TemplateConfig>::addLearntClauses()
 
 template <typename TemplateConfig>
 typename Solver<TemplateConfig>::CRef Solver<TemplateConfig>::addLearnt(
-                                                                        LearntClause<Database> const & lc)
+                                                                        LearntClause<Database> const & lc,
+                                                                        bool const additional)
 {
    CRef cr = Database::npos();
    drat.addClause(lc.c);
@@ -638,6 +646,7 @@ typename Solver<TemplateConfig>::CRef Solver<TemplateConfig>::addLearnt(
       cr = ca.alloc(lc.c, true);
       Clause & c = ca[cr];
       c.set_lbd(lc.lbd);
+      c.setSimplified(additional);
       propEngine.attachClause(cr);
       reduce.addClause(cr);
       exchange.clauseLearnt(cr);
@@ -726,7 +735,7 @@ typename Solver<TemplateConfig>::lbool Solver<TemplateConfig>::solve()
    while (status == lbool::Undef() && withinBudget() && !exchange.isFinished())
    {
 LOG("Start")
-                                       assert(ig.decisionLevel() == 0);
+                                                                                 assert(ig.decisionLevel() == 0);
       branch.notifyRestart();
       restart.notifyRestart();
       analyze.notifyRestart();
@@ -749,11 +758,14 @@ LOG("Start")
       LOG("Solver won")
       if (status == lbool::False())
       {
-         if (!exchange.isOk() && verbosity > -1)
-            std::cout << "c solved through import\n";
-
          drat.addEmptyClause();
          drat.flush();
+      } else
+      {
+         if (!repropagateCurrentSolution())
+            assert(false);
+         else
+            std::cout << "c solution is correct on the given set\n";
       }
    } else
       status = lbool::Undef();

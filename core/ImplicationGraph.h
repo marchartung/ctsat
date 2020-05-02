@@ -100,6 +100,7 @@ class ImplicationGraph
    lbool operator[](Lit const l) const;
 
    Lit getTrailLit(int const idx) const;
+   void clearTrail();
 
    void backtrack(int const lvl);
 
@@ -157,6 +158,73 @@ class ImplicationGraph
    template <typename LitVec>
    void minimizeImpliedRecursive(LitVec & c, bool const full = false, int const startIdx = 1);
 
+   bool checkResolution(vec<Lit> const & c, vec<CRef> const & refs)
+   {
+      clearSeen();
+      initSeen2();
+      vec<Var> seens;
+
+      bool res = true;
+
+      for (int i = 0; i < refs.size(); ++i)
+      {
+         Clause const & r = ca[refs[i]];
+         for (int j = 0; j < r.size(); ++j)
+         {
+            if (value(r[j]).isFalse())
+            {
+               if (!isSeen(r[j].var()))
+               {
+                  res &= !isSeen2(r[j].var());
+                  setSeen(r[j].var());
+                  seens.push(r[j].var());
+               }
+            } else
+            {
+               assert(value(r[j]).isTrue());
+               res &= (isSeen(r[j].var()));
+               res &= (!isSeen2(r[j].var()));
+               setSeen2(r[j].var());
+            }
+         }
+      }
+      if (!res)
+         std::cout << "f1\n";
+      for (int i = 0; i < c.size(); ++i)
+      {
+         res &= (isSeen(c[i].var()));
+         res &= (!isSeen2(c[i].var()));
+         setSeen2(c[i].var());
+      }
+      if (!res)
+         std::cout << "f2\n";
+      for (int i = 0; i < seens.size(); ++i)
+      {
+         if(level(seens[i]) == 0)
+            continue;
+         res &= (isSeen(seens[i]));
+         res &= (isSeen2(seens[i]));
+         if (isSeen(seens[i]) && !isSeen2(seens[i]))
+            std::cout << "faulty var :" << seens[i] << "\n";
+      }
+      if (!res)
+         std::cout << "f3\n";
+      if (!res)
+      {
+         std::cout << "faulty resolution\n";
+         for (int i = 0; i < refs.size(); ++i)
+         {
+            std::cout << i << ":";
+            printClause(ca[refs[i]]);
+         }
+
+         printClause(c);
+      }
+      for (int i = 0; i < seen.size(); ++i)
+         seen[i] = 0;
+      return res;
+   }
+
  private:
    Database & ca;
 
@@ -208,9 +276,9 @@ inline void ImplicationGraph<Database>::minimizeImplied(LitVec & c, int const st
 template <typename Database>
 template <typename LitVec>
 inline void ImplicationGraph<Database>::minimizeImpliedRecursive(
-                                                          LitVec & c,
-                                                          bool const full,
-                                                          int const startIdx)
+                                                                 LitVec & c,
+                                                                 bool const full,
+                                                                 int const startIdx)
 {
    int i = startIdx, j = startIdx;
    uint32_t abstract_level = 0;
@@ -229,13 +297,13 @@ inline void ImplicationGraph<Database>::minimizeImpliedRecursive(
 template <typename Database>
 template <typename ClauseVisited, typename LitVisited, typename RunFurther>
 inline int ImplicationGraph<Database>::visitImplications(
-                                                  int index,
-                                                  CRef cref,
-                                                  const int lvl,
-                                                  ClauseVisited const & clauseVisited,
-                                                  LitVisited const & litVisited,
-                                                  RunFurther const & runFurther,
-                                                  bool const unmarkSeen)
+                                                         int index,
+                                                         CRef cref,
+                                                         const int lvl,
+                                                         ClauseVisited const & clauseVisited,
+                                                         LitVisited const & litVisited,
+                                                         RunFurther const & runFurther,
+                                                         bool const unmarkSeen)
 {
    Lit p = Lit::Undef();
    // Generate conflict clause:
@@ -277,7 +345,7 @@ inline int ImplicationGraph<Database>::visitImplications(
 
       Var const pv = p.var();
       cref = reason(pv);
-      if(unmarkSeen)
+      if (unmarkSeen)
          unsetSeen(pv);
    } while (runFurther(p));
    return index + 1;
@@ -434,9 +502,9 @@ inline void ImplicationGraph<Database>::clearSeen(int const keepN)
    for (int i = keepN; i < analyze_toclear.size(); ++i)
       unsetSeen(analyze_toclear[i].var());
    analyze_toclear.shrink(analyze_toclear.size() - keepN);
-//   if (keepN == 0)
-//      for (int i = 0; i < seen.size(); ++i)
-//         assert(!seen[i] || level(i) == 0);
+   if (keepN == 0)
+      for (int i = 0; i < seen.size(); ++i)
+         assert(!seen[i] || level(i) == 0);
 }
 
 template <typename Database>
@@ -444,7 +512,6 @@ inline ImplicationGraph<Database>::ImplicationGraph(Database & ca)
       : ca(ca),
         counter(0)
 {
-
 }
 
 template <typename Database>
@@ -571,6 +638,16 @@ inline typename ImplicationGraph<Database>::Lit ImplicationGraph<Database>::getT
                                                                                         int const idx) const
 {
    return trail[idx];
+}
+
+template <typename Database>
+inline void ImplicationGraph<Database>::clearTrail()
+{
+   for (int i = 0; i < trail.size(); ++i)
+      unassign(trail[i].var());
+   trail.clear();
+   trail_lim.clear();
+   trail_lim.push(0);
 }
 
 template <typename Database>

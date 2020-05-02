@@ -86,6 +86,7 @@ class Inputs
    static IntOption spec_inc_reduce_db;
    static IntOption maxProtectableLbd;
 
+   static BoolOption remove_satisfied;
    static BoolOption useVivification;
    static BoolOption use_elim;
    static IntOption grow;
@@ -101,9 +102,11 @@ class Inputs
 
    static BoolOption verifySat;
    static BoolOption model;
-   static BoolOption drup;
-   static StringOption drup_file;
+   static StringOption drat_file;
 
+   static BoolOption adaptiveThreadStart;
+   static IntOption adaptiveThreadDisableBase;
+   static IntOption adaptiveThreadDisableFactor;
    static BoolOption onlyExportWhenMin;
    static BoolOption minimize_import_cl;
    static IntOption nThreads;

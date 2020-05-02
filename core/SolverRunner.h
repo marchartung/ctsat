@@ -139,7 +139,6 @@ class SolverRunner
    {
       LOG_INIT(0)
       printSolverAnnouncement();
-      SatInstance inst;
       lbool const res = runDatabase<NoConnector>(config, nullptr);
       LOG("Solver finished")
       return res;
@@ -247,19 +246,19 @@ class SolverRunner
    {
       switch (config.analyze)
       {
-//         case AnalyzeHeuristic::FUIP:
-//            LOG("Using fuip")
+//         case AnalyzeHeuristic::LEVELAWARE:
+//            LOG("Using laa")
 //            return runExchange<Connector, Database, Branch, Restart, Reduce, Propagate,
-//                  FirstUipAnalyze<Propagate> >(config, threadData);
+//                  LevelAwareAnalyze<Propagate> >(config, threadData);
 //
 //         case AnalyzeHeuristic::MUIP:
 //            LOG("Using muip")
 //            return runExchange<Connector, Database, Branch, Restart, Reduce, Propagate,
 //                  MultiUipAnalyze<Propagate> >(config, threadData);
          default:
-            LOG("Using laa")
+            LOG("Using fuip")
             return runExchange<Connector, Database, Branch, Restart, Reduce, Propagate,
-                  LevelAwareAnalyze<Propagate> >(config, threadData);
+                  FirstUipAnalyze<Propagate> >(config, threadData);
 
       }
 
@@ -311,6 +310,8 @@ class SolverRunner
       Preprocessor prepro(config);
       LOG("Process instance " + filename)
       SatInstance res = prepro.getInstance(filename);
+      if(res.isOk() && Inputs::verifySat && !ModelChecker::checkSat(res.model, (*Inputs::argv)[1], res.isDecisionVar, true))
+         std::cout << "c Warning: preprocessor already created unsolvable problem" << std::endl;
 //      ModelChecker::printSatisfiedClauses(res.model, filename);
       return res;
    }
@@ -326,92 +327,90 @@ class SolverRunner
       if (!inst.isOk())
       {
          ret = lbool::False();
-         LOG("Solved through preprocessor")
-      }
-      else
-      {
-         LOG("Initialize solver")
-         NoConnector connector;
-         Solver<
-               TemplateConfiguration<NoConnector, Database, Branch, Restart, Reduce, Propagate,
-                     Analyze, NoClauseExchanger<Database, NoConnector, Propagate>>> solver(
-               config, connector, std::move(inst));
-
-         if (solver.isOk())
-            ret = solver.solve();
-         if (config.verbosity > 0)
-         {
-            solver.printFinalStats();
-            printf("\n");
-         }
-         if (ret.isTrue())
-         {
-            LOG("Process model")
-
-            EliminatedClauseDatabase & elimDb = inst.elimDb;
-            vec<lbool> & model = inst.model;
-            solver.setModel(model);
-            elimDb.extendModel(model);
-
-            if (Inputs::model)
-               elimDb.printModel(model);
-            if (Inputs::verifySat)
-            {
-               if (ModelChecker::checkSat(model, (*Inputs::argv)[1]))
-                  std::cout << "c SAT solution is correct\n";
-               else
-                  std::cout << "c Solution is WRONG!!!!\n";
-            }
-         }
-      }
-      printf(
-            ret.isTrue() ? "s SATISFIABLE\n" : ret.isFalse() ? "s UNSATISFIABLE\n" : "s UNKNOWN\n");
-
-      return ret;
-   }
-
-   template <typename Connector, typename Database, typename Branch, typename Restart,
-         typename Reduce, typename Propagate, typename Analyze, typename Exchanger>
-   static lbool run_parallel(SolverConfig const & config, void * threadData)
+      LOG("Solved through preprocessor")
+   } else
    {
-      LOG("Solving parallel")
-      assert(!config.drup);
-      lbool ret = lbool::Undef();
-
-      ThreadData<Connector> & data = *reinterpret_cast<ThreadData<Connector>*>(threadData);
-      if(config.pinSolver && !NumaAwareSet::instance.isFallback)
-      {
-         LOG("Pinning solver")
-         auto const & cmap = NumaAwareSet::instance.getIdealThreadCoreMapping();
-         CPUBind::bindThread(cmap[data.threadId % cmap.size()]);
-      }
-      data.conn.notifyThreadStart();
-      LOG("Initialize solver")
+      LOG("Initialize solver");
+      NoConnector connector;
       Solver<
-            TemplateConfiguration<Connector, Database, Branch, Restart, Reduce, Propagate, Analyze,
-                  Exchanger>> solver(config, data.conn, data.inst);
-      data.stat = &solver.getStatistic();
-      data.conn.notifyThreadInitialized();
+            TemplateConfiguration<NoConnector, Database, Branch, Restart, Reduce, Propagate,
+                  Analyze, NoClauseExchanger<Database, NoConnector, Propagate>>> solver(
+            config, connector, std::move(inst));
 
       if (solver.isOk())
          ret = solver.solve();
-
-      if (!ret.isUndef())
+      if (config.verbosity > 0)
       {
-         if (ret.isTrue())
+         solver.printFinalStats();
+         printf("\n");
+      }
+      if (ret.isTrue())
+      {
+         LOG("Process model");
+
+         EliminatedClauseDatabase & elimDb = inst.elimDb;
+         vec<lbool> & model = inst.model;
+         solver.setModel(model, inst.isDecisionVar);
+         elimDb.extendModel(model);
+
+         if (Inputs::model)
+            elimDb.printModel(model);
+         if (Inputs::verifySat)
          {
-            LOG("commit model")
-            typedef typename Database::lbool bool_type;
-            vec<bool_type> model(solver.nVars(), bool_type::Undef());
-            solver.setModel(model);
-            data.conn.commitModel(std::move(model));
+            if (ModelChecker::checkSat(model, (*Inputs::argv)[1], inst.isDecisionVar))
+               std::cout << "c SAT solution is correct\n";
+            else
+               std::cout << "c Solution is WRONG!!!!\n";
          }
       }
-
-      data.conn.notifyThreadEnd();
-      data.stat = nullptr;
-      return ret;
    }
+   printf(ret.isTrue() ? "s SATISFIABLE\n" : ret.isFalse() ? "s UNSATISFIABLE\n" : "s UNKNOWN\n");
+
+   return ret;
+}
+
+template <typename Connector, typename Database, typename Branch, typename Restart, typename Reduce,
+      typename Propagate, typename Analyze, typename Exchanger>
+static lbool run_parallel(SolverConfig const & config, void * threadData)
+{
+LOG("Solving parallel")
+            assert(config.drat_file.size() == 0);
+   lbool ret = lbool::Undef();
+
+   ThreadData<Connector> & data = *reinterpret_cast<ThreadData<Connector>*>(threadData);
+   if (config.pinSolver && !NumaAwareSet::instance.isFallback)
+   {
+      LOG("Pinning solver")
+      auto const & cmap = NumaAwareSet::instance.getIdealThreadCoreMapping();
+      CPUBind::bindThread(cmap[data.threadId % cmap.size()]);
+   }
+   data.conn.notifyThreadStart();
+   LOG("Initialize solver")
+   Solver<
+         TemplateConfiguration<Connector, Database, Branch, Restart, Reduce, Propagate, Analyze,
+               Exchanger>> solver(config, data.conn, data.inst);
+   data.stat = &solver.getStatistic();
+   data.conn.notifyThreadInitialized();
+
+   if (solver.isOk())
+      ret = solver.solve();
+
+   if (!ret.isUndef())
+   {
+      if (ret.isTrue())
+      {
+         LOG("commit model")
+         typedef typename Database::lbool bool_type;
+         vec<bool_type> model(solver.nVars(), bool_type::Undef());
+         solver.setModel(model, data.inst.isDecisionVar);
+         data.conn.commitModel(std::move(model));
+      }
+   }
+
+   data.conn.notifyThreadEnd();
+   data.stat = nullptr;
+   return ret;
+}
 
 };
 }

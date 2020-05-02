@@ -37,13 +37,13 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 namespace ctsat
 {
-bool ModelChecker::checkSat(vec<lbool> const & model, std::string const filename)
+bool ModelChecker::checkSat(vec<lbool> const & model, std::string const filename, vec<bool> const & wasDecision, bool const undefAsSat )
 {
    gzFile f = gzopen(filename.c_str(), "rb");
    if (f == NULL)
       printf("c ERROR! Could not open file: %s\n", filename.c_str()), throw InputException();
    StreamBuffer in(f);
-   bool const res = checkSat(model, in);
+   bool const res = checkSat(model, in,wasDecision,undefAsSat);
    gzclose(f);
    return res;
 }
@@ -68,7 +68,7 @@ void ModelChecker::printUndefClauses(vec<lbool> const & model, std::string const
    gzclose(f);
 }
 
-void ModelChecker::printClause(vec<lbool> const & model, vec<Lit> & c)
+void ModelChecker::printClause(vec<lbool> const & model, vec<Lit> & c, vec<bool> const & wasDecision)
 {
    std::cout << "c [ ";
    for (int i = 0; i < c.size(); ++i)
@@ -79,7 +79,7 @@ void ModelChecker::printClause(vec<lbool> const & model, vec<Lit> & c)
          val = (mval.sign() == c[i].sign()) ? lbool::True() : lbool::False();
 
       std::cout << ((c[i].sign()) ? "-" : "") << c[i].var() << "("
-                << ((val.isUndef()) ? "u)" : ((val.isTrue()) ? "t)" : "f)")) << " ";
+                << ((val.isUndef()) ? "u" : ((val.isTrue()) ? "t)" : "f")) << "," << ((wasDecision[c[i].var()]) ? "d" : "p") << ") ";
    }
    std::cout << "]\n";
 }
@@ -185,7 +185,7 @@ bool ModelChecker::printSatisfiedClauses(vec<lbool> const & model, StreamBuffer 
    return ok;
 }
 
-bool ModelChecker::checkSat(vec<lbool> const & model, StreamBuffer & in)
+bool ModelChecker::checkSat(vec<lbool> const & model, StreamBuffer & in, vec<bool> const & wasDecision, bool const undefAsSat )
 {
    vec<Lit> lits;
 //      int vars = 0;
@@ -224,15 +224,15 @@ bool ModelChecker::checkSat(vec<lbool> const & model, StreamBuffer & in)
             }
             var = abs(parsed_lit) - 1;
             lits.push(Lit(var, parsed_lit < 0));
-            assert(!model[var].isUndef());
+            assert(undefAsSat || !model[var].isUndef());
             // printf("%d ", parsed_lit);
-            if ((parsed_lit > 0 && model[var].isTrue()) || (parsed_lit < 0 && model[var].isFalse()))
+            if ((parsed_lit > 0 && model[var].isTrue()) || (parsed_lit < 0 && model[var].isFalse()) || (undefAsSat && model[var].isUndef()))
                isSat = true;
          }
          if (!isSat)
          {
             printf("c clause %d is not satisfied\n", cnt);
-            printClause(model, lits);
+            printClause(model, lits, wasDecision);
             ok = false;
             // break;
          }

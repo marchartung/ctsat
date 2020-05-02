@@ -1,0 +1,3 @@
+#!/bin/sh 
+
+./ctsat_release $1

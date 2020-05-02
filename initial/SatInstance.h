@@ -64,6 +64,7 @@ class SatInstance
    SatInstance(SatInstance && in);
    SatInstance(
                vec<lbool> && model,
+               vec<bool> && isDecisionVar,
                vec<CRef> && clauses,
                Database && db,
                EliminatedClauseDatabase && elimDb,
@@ -79,7 +80,10 @@ class SatInstance
 
    bool isClean() const;
 
+   bool checkModel() const;
+
    vec<lbool> model;
+   vec<bool> isDecisionVar;
    vec<CRef> clauses;
    Database ca;
    EliminatedClauseDatabase elimDb;

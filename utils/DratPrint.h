@@ -52,13 +52,8 @@ class DratPrint
    template<typename E>
    DratPrint& operator=(DratPrint<E> const &) = delete;
  public:
-   DratPrint(const bool shouldPrint, const std::string & proofFileName)
-         : proof((shouldPrint) ? fopen(proofFileName.c_str(), "wb") : NULL)
-   {
-   }
-
-   DratPrint()
-         : DratPrint<Lit>(false, "")
+   DratPrint(const std::string & proofFileName = "")
+         : proof((proofFileName.size() > 0) ? fopen(proofFileName.c_str(), "wb") : NULL)
    {
    }
 

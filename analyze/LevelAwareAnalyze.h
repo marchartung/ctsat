@@ -123,21 +123,24 @@ inline void LevelAwareAnalyze<Propagate>::run(const CRef confl, const Callbacks&
       {
          if (cc.lc.isAsserting)
          {
-            if (cc.lc.c.size() < FUA::lc.c.size()) // the cc clause is better than the fuip
+            if (cc.lc.c.size() < FUA::lc.c.size())  // the cc clause is better than the fuip
                cc.lc.swap(FUA::lc);
-            else if(cc.lc.c[0] == FUA::lc.c[0])
-               cc.hasClause = false; // the chance they are equal is high, so remove the cc clause
+            else if (cc.lc.c[0] == FUA::lc.c[0])
+               cc.hasClause = false;  // the chance they are equal is high, so remove the cc clause
          } else if (cc.lc.c.size() > FUA::lc.c.size())
-            cc.hasClause = false; // longer clauses and not asserting ... for sure meaningless
+            cc.hasClause = false;  // longer clauses and not asserting ... for sure meaningless
          else
-            cc.lc.lbd = cc.lc.c.size()-1; // since the clause is not asserting, the lbd value some kine of false
+            cc.lc.lbd = cc.lc.c.size() - 1;  // since the clause is not asserting, the lbd value some kine of false
       }
+      if (false && addClauses)  // since binResMin does not work here, we can skip them, when only swap is active
+      {
+         MUA::collectMuipLearnts(curIndex, conflictLevel);
+         for (int i = 0; i < MUA::lcPos; ++i)
+            if (MUA::lcs[i].isAsserting && MUA::lcs[i].c.size() < FUA::lc.c.size())
+               FUA::lc.swap(MUA::lcs[i]);
 
-      MUA::collectMuipLearnts(curIndex, conflictLevel);
-      for (int i = 0; i < MUA::lcPos; ++i)
-         if (MUA::lcs[i].isAsserting && MUA::lcs[i].c.size() < FUA::lc.c.size())
-            FUA::lc.swap(MUA::lcs[i]);
-      if (!addClauses) // check if we only wanted to find a better clause, if so we delete the additional clauses
+      }
+      if (!addClauses)  // check if we only wanted to find a better clause, if so we delete the additional clauses
       {
          MUA::lcReadPos = MUA::lcPos;
          cc.hasClause = false;

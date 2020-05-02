@@ -76,9 +76,8 @@ void EliminatedClauseDatabase::addElimClause(Var const v, const Clause& c)
 
 void EliminatedClauseDatabase::extendModel(vec<lbool> & model) const
 {
-   int i, j;
    Lit x;
-
+   int i, j;
    for (i = elimclauses.size() - 1; i > 0; i -= j)
    {
       for (j = elimclauses[i--]; j > 1; j--, i--)

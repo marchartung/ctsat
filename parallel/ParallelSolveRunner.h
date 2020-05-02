@@ -142,7 +142,7 @@ class ParallelSolverRunner : public SolverRunner
             elimDb.printModel(model);
          if (Inputs::verifySat)
          {
-            if (ModelChecker::checkSat(model, (*Inputs::argv)[1]))
+            if (ModelChecker::checkSat(model, (*Inputs::argv)[1],inst.isDecisionVar))
                std::cout << "c SAT solution is correct\n";
             else
                std::cout << "c Solution is WRONG!!!!\n";

@@ -135,17 +135,17 @@ class MPISolverRunner : public SolverRunner
       } else if (!receiveInstance(*mem))
          return mem;
       if (!mem->partitioner.isFilter())
-         startThreads(SolverConfig::getNumRecommandedThreads(mem->partitioner.getGlobalRank()), mem->tdata, mem->conn, mem->inst,
-                      mem->partitioner.getGlobalRank());
+         startThreads(SolverConfig::getNumRecommandedThreads(mem->partitioner.getGlobalRank()),
+                      mem->tdata, mem->conn, mem->inst, mem->partitioner.getGlobalRank());
       else
          startFilterThreads(SolverConfig::getMaxNumThreads(), mem->tdata, mem->conn, mem->inst,
                             mem->partitioner.getGlobalRank());
       mem->distributor.freeInstance();
       mem->conn.waitInitialize(mem->tdata.size());
-      mem->inst.ca.clear(true);
+      if (!Inputs::verifySat)
+         mem->inst.ca.clear(true);
       return mem;
    }
-
 
    static void startThreads(
                             size_t const threadCount,
@@ -166,21 +166,15 @@ class MPISolverRunner : public SolverRunner
    }
 
    static void joinThreads(ConnType & conn, std::vector<TData> & tdata)
+   {
+      conn.allowMemFree();
+      for (size_t i = 0; i < tdata.size(); ++i)
       {
-         conn.allowMemFree();
-         for (size_t i = 0; i < tdata.size(); ++i)
-         {
-            if (pthread_join(tdata[i].pthreadId, NULL) != 0)
-               std::cout
-                  << "c Warning: Thread join failed on thread "
-                  << tdata[i].threadId
-                  << "("
-                  << tdata[i].pthreadId
-                  << ")"
-                  << std::endl;
-         }
+         if (pthread_join(tdata[i].pthreadId, NULL) != 0)
+            std::cout << "c Warning: Thread join failed on thread " << tdata[i].threadId << "("
+                      << tdata[i].pthreadId << ")" << std::endl;
       }
-
+   }
 
    static void startFilterThreads(
                                   size_t const threadCount,
@@ -200,13 +194,12 @@ class MPISolverRunner : public SolverRunner
       }
    }
 
-
    static void * pthreadStartFilter(void * v)
    {
 //      TData & data = *reinterpret_cast<TData*>(v);
       LOG_INIT(data.rank)
-      LOG("Filter thread " + std::to_string(pthread_self()) + " started")
-      assert(false);
+LOG("Filter thread " + std::to_string(pthread_self()) + " started")
+            assert(false);
       LOG("Thread finished")
       LOG_DEINIT
       pthread_exit(NULL);
@@ -220,13 +213,13 @@ class MPISolverRunner : public SolverRunner
       return res == 0;
    }
 
-
    static void * pthreadStart(void * v)
    {
       TData & data = *reinterpret_cast<TData*>(v);
       LOG_INIT(data.rank)
       LOG("Thread " + std::to_string(pthread_self()) + " started")
-      SolverRunner::runDatabase<ConnType>(SolverConfig::getMpiThreadConfig(data.threadId,data.rank), v);
+      SolverRunner::runDatabase<ConnType>(
+            SolverConfig::getMpiThreadConfig(data.threadId, data.rank), v);
       LOG("Thread finished")
       LOG_DEINIT
       pthread_exit(NULL);
@@ -381,9 +374,6 @@ class MPISolverRunner : public SolverRunner
             ret = mem.distributor.getRootResult();
          }
 
-         printf(
-               ret.isTrue() ? "s SATISFIABLE\n" :
-               ret.isFalse() ? "s UNSATISFIABLE\n" : "s UNKNOWN\n");
          if (ret.isTrue())
          {
 
@@ -398,30 +388,43 @@ class MPISolverRunner : public SolverRunner
             if (ret.isTrue())
             {
                LOG("Sets up model")
-               std::cout << "Winner rank: " << mem.distributor.getWinner() << std::endl;
+               std::cout << "c Winner rank: " << mem.distributor.getWinner() << std::endl;
                SatInstance & inst = mem.inst;
                EliminatedClauseDatabase const & elimDb = inst.elimDb;
                for (int i = 0; i < mem.inst.model.size(); ++i)
                {
-                  //assert(inst.model[i] == model[i] || inst.model[i].isUndef() || model[i].isUndef());
-                  if (!(inst.model[i] == model[i] || inst.model[i].isUndef() || model[i].isUndef()))
-                  {
-                     std::cout << "i=" << i << " was diff: " << inst.model[i].toInt() << " to "
-                               << model[i].toInt() << "\n";
-                  }
-                  inst.model[i] = (inst.model[i].isUndef()) ? model[i] : inst.model[i];
+                  assert(!inst.isDecisionVar[i] || !model[i].isUndef());
+                  inst.model[i] = (inst.isDecisionVar[i]) ? model[i] : inst.model[i];
                }
+               if (Inputs::verifySat
+                  && !ModelChecker::checkSat(inst.model, (*Inputs::argv)[1], inst.isDecisionVar,
+                                             true))
+               {
+                  std::cout << "c SAT solution is before extend wrong\n";
+                  if(!inst.checkModel())
+                     std::cout << "c created instance was already wrong\n";
+                  else
+                     std::cout << "Created instance was correct. Is there a bug in the preprocessor?\n";
+                  assert(false);
+               }
+
                elimDb.extendModel(inst.model);
                if (Inputs::model)
                   elimDb.printModel(inst.model);
                if (Inputs::verifySat)
                {
-                  if (ModelChecker::checkSat(inst.model, (*Inputs::argv)[1]))
+                  if (ModelChecker::checkSat(inst.model, (*Inputs::argv)[1], inst.isDecisionVar))
                      std::cout << "c SAT solution is correct\n";
                   else
+                  {
                      std::cout << "c Solution is WRONG!!!!\n";
+                     assert(false);
+                  }
                }
             }
+            printf(
+                  ret.isTrue() ? "s SATISFIABLE\n" :
+                  ret.isFalse() ? "s UNSATISFIABLE\n" : "s UNKNOWN\n");
          }
       }
       return ret;

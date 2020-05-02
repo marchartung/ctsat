@@ -1,7 +1,7 @@
 #!/bin/bash
 
 cd mpi
-make -j
+make r -j
 cd ..
 mkdir -p bin
-cp mpi/ctsat_mpi bin/
+cp mpi/ctsat_mpi_release bin/

@@ -46,17 +46,17 @@ class ModelChecker
 {
  public:
 
-   static bool checkSat(vec<lbool> const & model, std::string const filename);
+   static bool checkSat(vec<lbool> const & model, std::string const filename, vec<bool> const & wasDecision, bool const undefAsSat = false);
    static void printSatisfiedClauses(vec<lbool> const & model, std::string const filename);
    static void printUndefClauses(vec<lbool> const & model, std::string const filename);
 
  private:
 
    static bool printSatisfiedClauses(vec<lbool> const & model, StreamBuffer & in);
-   static bool checkSat(vec<lbool> const & model, StreamBuffer & in);
+   static bool checkSat(vec<lbool> const & model, StreamBuffer & in, vec<bool> const & wasDecision, bool const undefAsSat);
    static void printUndefClauses(vec<lbool> const & model, StreamBuffer & in);
 
-   static void printClause(vec<lbool> const & model, vec<Lit> & c);
+   static void printClause(vec<lbool> const & model, vec<Lit> & c, vec<bool> const & wasDecision);
 
 };
 }

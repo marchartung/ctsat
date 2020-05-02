@@ -96,10 +96,12 @@ inline void ConflictCore<Database>::run(
                                         int const conflictLevel,
                                         InprocessMinimize & inConflictMinimize)
 {
+
    int pathC = 0;
    unsigned numResolvents = 0, numBinResolvents = 0, numSkipped = 0;
    vec<Lit> & outC = lc.c;
    outC.clear();
+   outC.push();
    Lit p = Lit::Undef();
    CRef cref = confl;
    int index = ig.nAssigns();
@@ -135,6 +137,8 @@ inline void ConflictCore<Database>::run(
 
       if (use)
       {
+//         std::cout << numResolvents << ":";
+//         ig.printClause(c);
          ++numResolvents;
          numBinResolvents += c.size() == 2;
 
@@ -150,8 +154,7 @@ inline void ConflictCore<Database>::run(
             }
          }
       }
-      if (pathC == 0)
-         break;
+      assert (pathC > 0);
       // Select next clause to look at:
       do
       {
@@ -163,13 +166,14 @@ inline void ConflictCore<Database>::run(
       Var const pv = p.var();
       cref = ig.reason(pv);
       --pathC;
-   } while (ig.reason(p) != Database::npos());
+   } while (pathC > 0);
+   outC[0] = ~p;
    // Generate conflict clause:
+//   std::cout << "res:";
+//   ig.printClause(outC);
    //
    if (numSkipped > 0 && numResolvents > 1 && numResolvents > numBinResolvents)
    {
-      if (ig.reason(p) == Database::npos())
-         outC.push(~p);
       // add lits from conflict clause:
       Clause const & conflClause = ca[confl];
       for (int i = 0; i < conflClause.size(); ++i)
@@ -178,13 +182,16 @@ inline void ConflictCore<Database>::run(
          if (lvl > 0 && lvl < conflictLevel)
             outC.push(conflClause[i]);
       }
+//      std::cout << "fin:";
+//      ig.printClause(outC);
+
 
       lc.lbd = inConflictMinimize.run(outC);
       lc.isAsserting = outC.size() == 1 || ig.level(outC[1]) < conflictLevel;  // all but one lit were eliminated during minimize
       // prepare for asserting
-      if (lc.isAsserting && outC.size() > 1)
+
+      if (outC.size() > 1)
       {
-         assert(ig.level(outC[1]) > 0);
          int max_i = 1;
          for (int i = 2; i < outC.size(); i++)
          {
@@ -209,7 +216,7 @@ inline bool ConflictCore<Database>::hasLearntClause() const
 }
 
 template <typename Database>
-inline const LearntClause<Database>& ConflictCore<Database>::getLearntClause()
+inline const LearntClause<Database> & ConflictCore<Database>::getLearntClause()
 {
    assert(hasClause);
    hasClause = false;

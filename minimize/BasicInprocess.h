@@ -32,8 +32,7 @@ class BasicInprocessMinimize
 
    // returns lbd of minimized clause
    template <typename LitVec>
-   int run(LitVec & c, int const startIdx = 1);
-
+   int run(LitVec & c, int const startIdx = 1, bool const containsTrue = false);
 
  private:
    ImplicationGraph<Database> & ig;
@@ -43,14 +42,13 @@ class BasicInprocessMinimize
    int const maxEntendedBinaryResolutionSz;
    int const maxFullImplicationMinLbd;
 
-
 };
 
 template <typename Propagate>
 inline BasicInprocessMinimize<Propagate>::BasicInprocessMinimize(
-                                                                        const SolverConfig& config,
-                                                                        ImplicationGraph<Database>& ig,
-                                                                        Propagate& propEngine)
+                                                                 const SolverConfig& config,
+                                                                 ImplicationGraph<Database>& ig,
+                                                                 Propagate& propEngine)
       : ig(ig),
         propEngine(propEngine),
         ccmin_mode(config.ccmin_mode),
@@ -59,10 +57,12 @@ inline BasicInprocessMinimize<Propagate>::BasicInprocessMinimize(
 {
 }
 
-
 template <typename Propagate>
 template <typename LitVec>
-inline int BasicInprocessMinimize<Propagate>::run(LitVec & c, int const startIdx)
+inline int BasicInprocessMinimize<Propagate>::run(
+                                                  LitVec & c,
+                                                  int const startIdx,
+                                                  bool const containsTrue)
 {
    int lbd = ig.computeLBD(c);
    // minimize conflict clause:
@@ -71,13 +71,17 @@ inline int BasicInprocessMinimize<Propagate>::run(LitVec & c, int const startIdx
    else if (ccmin_mode == 1)
       ig.minimizeImplied(c);
 
-   if (c.size() <= maxEntendedBinaryResolutionSz)
+   // TODO write version for true literals:
+   if (!containsTrue)
    {
-      propEngine.extendedBinResMinimize(c);
-      lbd = std::min(ig.computeLBD(c), lbd + 1);
-   } else if (lbd <= 6 && c.size() <= 30)  // Try further minimization?
-      if (propEngine.binResMinimize(c))
+      if (c.size() <= maxEntendedBinaryResolutionSz)
+      {
+         propEngine.extendedBinResMinimize(c, startIdx);
          lbd = std::min(ig.computeLBD(c), lbd + 1);
+      } else if (lbd <= 6 && c.size() <= 30)  // Try further minimization?
+         if (propEngine.binResMinimize(c, startIdx))
+            lbd = std::min(ig.computeLBD(c), lbd + 1);
+   }
    return lbd;
 }
 

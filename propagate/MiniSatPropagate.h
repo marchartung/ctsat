@@ -88,8 +88,8 @@ class MinisatPropagate
    bool isAttached(CRef const & ref) const;
    bool isBadAttached(CRef const & ref) const;
 
-   bool binResMinimize(vec<Lit>& out_learnt);  // Further learnt clause minimization by binary resolution.
-   bool extendedBinResMinimize(vec<Lit>& out_learnt);
+   bool binResMinimize(vec<Lit>& out_learnt, int const startIdx);  // Further learnt clause minimization by binary resolution.
+   bool extendedBinResMinimize(vec<Lit>& out_learnt, int const startIdx);
 
    int qhead;  // Head of queue (as index into the trail -- no more explicit propagation queue in MiniSat).
    int trailRecord;
@@ -676,15 +676,15 @@ inline void MinisatPropagate<DatabaseType>::swapWatched(const CRef cr, const int
 }
 
 template <typename DatabaseType>
-inline bool MinisatPropagate<DatabaseType>::extendedBinResMinimize(vec<Lit>& c)
+inline bool MinisatPropagate<DatabaseType>::extendedBinResMinimize(vec<Lit>& c, int const startIdx)
 {
-   ig.markSeen2(c, 1);
+   ig.markSeen2(c, startIdx);
    bool removedSome = false;
    for (int i = 0; i < c.size() - 1; ++i)
       removedSome |= unsee2BinaryImplied(c[i]);
    if (removedSome)
    {
-      if (!ig.removeNotSeen2(c, 1))
+      if (!ig.removeNotSeen2(c, startIdx))
          assert(false);  // should have removed something
       return true;
    } else
@@ -712,13 +712,13 @@ bool MinisatPropagate<DatabaseType>::unsee2BinaryImplied(Lit const & l)
 
 // Try further learnt clause minimization by means of binary clause resolution.
 template <typename DatabaseType>
-inline bool MinisatPropagate<DatabaseType>::binResMinimize(vec<Lit>& out_learnt)
+inline bool MinisatPropagate<DatabaseType>::binResMinimize(vec<Lit>& out_learnt, int const startIdx)
 {
    // Preparation: remember which false variables we have in 'out_learnt'.
-   ig.markSeen2(out_learnt, 1);
+   ig.markSeen2(out_learnt, startIdx);
    if (unsee2BinaryImplied(out_learnt[0]))
    {
-      if (!ig.removeNotSeen2(out_learnt, 1))
+      if (!ig.removeNotSeen2(out_learnt, startIdx))
          assert(false);  // should have removed something
       return true;
    } else
