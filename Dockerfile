@@ -2,10 +2,10 @@ FROM ubuntu:18.04
 
 RUN apt-get update && apt-get install -y openssh-server git \
     unzip wget build-essential zlib1g-dev make iproute2 cmake \
-    python python-pip openmpi-bin openmpi-common libopenmpi-dev iputils-ping
+    python python-pip g++ libopenmpi-dev iputils-ping
 
 RUN git clone --single-branch --branch parallel https://github.com/marchartung/ctsat ctsat
-RUN cd ctsat && ./build_mpi.sh
+RUN cd ctsat && ./build_parallel.sh
 
 ADD * ctsat/
 
