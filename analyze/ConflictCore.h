@@ -39,188 +39,160 @@
 #include "minimize/BasicInprocess.h"
 #include "analyze/FirstUipAnalyze.h"
 
-namespace ctsat
-{
-template <typename Propagate>
+namespace ctsat {
+template<typename Propagate>
 class ConflictCoreAnalyze;
-template <typename Propagate>
+template<typename Propagate>
 class LevelAwareAnalyze;
 
 // this is just a helper, is cannot analyze a conflict with asserting clauses
-template <typename Database>
-class ConflictCore
-{
-   typedef typename Database::Lit Lit;
-   typedef typename Database::Var Var;
-   typedef typename Database::Clause Clause;
-   typedef typename Database::CRef CRef;
-   typedef typename Database::lbool lbool;
- public:
-   template <typename Propagate>
-   friend class ConflictCoreAnalyze;
-   template <typename Propagate>
-   friend class LevelAwareAnalyze;
+template<typename Database>
+class ConflictCore {
+	typedef typename Database::Lit Lit;
+	typedef typename Database::Var Var;
+	typedef typename Database::Clause Clause;
+	typedef typename Database::CRef CRef;
+	typedef typename Database::lbool lbool;
+public:
+	template<typename Propagate>
+	friend class ConflictCoreAnalyze;
+	template<typename Propagate>
+	friend class LevelAwareAnalyze;
 
-   ConflictCore(SolverConfig const & config, Database & ca, ImplicationGraph<Database> & ig);
+	ConflictCore(SolverConfig const & config, Database & ca,
+			ImplicationGraph<Database> & ig);
 
-   template <typename InprocessMinimize>
-   void run(CRef const confl, int const conflictLevel, InprocessMinimize & inConflictMinimize);
+	template<typename InprocessMinimize>
+	void run(CRef const confl, int const conflictLevel,
+			InprocessMinimize & inConflictMinimize);
 
-   bool hasLearntClause() const;
-   LearntClause<Database> const & getLearntClause();
+	bool hasLearntClause() const;
+	LearntClause<Database> const & getLearntClause();
 
- protected:
-   bool hasClause;
-   Database & ca;
-   ImplicationGraph<Database> & ig;
+protected:
+	bool hasClause;
+	Database & ca;
+	ImplicationGraph<Database> & ig;
 
-   LearntClause<Database> lc;
+	LearntClause<Database> lc;
 };
 
-template <typename Database>
-ConflictCore<Database>::ConflictCore(
-                                     SolverConfig const & config,
-                                     Database & ca,
-                                     ImplicationGraph<Database> & ig)
-      : hasClause(false),
-        ca(ca),
-        ig(ig)
-{
+template<typename Database>
+ConflictCore<Database>::ConflictCore(SolverConfig const & config, Database & ca,
+		ImplicationGraph<Database> & ig) :
+		hasClause(false), ca(ca), ig(ig) {
 
 }
 
-template <typename Database>
-template <typename InprocessMinimize>
-inline void ConflictCore<Database>::run(
-                                        const CRef confl,
-                                        int const conflictLevel,
-                                        InprocessMinimize & inConflictMinimize)
-{
+template<typename Database>
+template<typename InprocessMinimize>
+inline void ConflictCore<Database>::run(const CRef confl,
+		int const conflictLevel, InprocessMinimize & inConflictMinimize) {
+	ig.startTracking();
+	int pathC = 0;
+	unsigned numResolvents = 0, numBinResolvents = 0, numSkipped = 0;
+	vec<Lit> & outC = lc.c;
+	outC.clear();
+	outC.push();
+	Lit p = Lit::Undef();
+	CRef cref = confl;
+	int index = ig.nAssigns();
 
-   int pathC = 0;
-   unsigned numResolvents = 0, numBinResolvents = 0, numSkipped = 0;
-   vec<Lit> & outC = lc.c;
-   outC.clear();
-   outC.push();
-   Lit p = Lit::Undef();
-   CRef cref = confl;
-   int index = ig.nAssigns();
+	do {
+		assert(cref != Database::npos());  // (otherwise should be UIP)
+		Clause & cPre = ca[cref];
 
-   do
-   {
-      assert(cref != Database::npos());  // (otherwise should be UIP)
-      Clause & c = ca[cref];
+		// For binary clauses, we don't rearrange literals in propagate(), so check and make sure the first is an implied lit.
+		if (p != Lit::Undef() && cPre.size() == 2
+				&& ig.value(cPre[0]).isFalse()) {
+			assert(false);
+		}
 
-      // For binary clauses, we don't rearrange literals in propagate(), so check and make sure the first is an implied lit.
-      if (p != Lit::Undef() && c.size() == 2 && ig.value(c[0]).isFalse())
-      {
-         assert(ig.value(c[1]).isTrue());
-         Lit const tmp = c[0];
-         c[0] = c[1], c[1] = tmp;
-      }
+		bool use = true;
+		if (cref != confl)
+			for (int i = 0; i < cPre.size(); ++i) {
+				Var const v = cPre[i].var();
+				int const level = ig.level(v);
+				if (!ig.isSeen(v) && level < conflictLevel && level > 0) {
+					outC.push(~p);  // collect not resolved lits
+					assert(ig.isSeen(p.var()));
+					++numSkipped;
+					use = false;
+					break;
+				}
+			}
 
-      bool use = true;
-      if (cref != confl)
-         for (int i = 0; i < c.size(); ++i)
-         {
-            Var const v = c[i].var();
-            int const level = ig.level(v);
-            if (!ig.isSeen(v) && level < conflictLevel && level > 0)
-            {
-               outC.push(~p);  // collect not resolved lits
-               assert(ig.isSeen(p.var()));
-               ++numSkipped;
-               use = false;
-               break;
-            }
-         }
-
-      if (use)
-      {
+		if (use) {
+			Clause const & c = ig.getResolvent(cref);
 //         std::cout << numResolvents << ":";
 //         ig.printClause(c);
-         ++numResolvents;
-         numBinResolvents += c.size() == 2;
+			++numResolvents;
+			numBinResolvents += c.size() == 2;
 
-         for (int j = (p == Lit::Undef()) ? 0 : 1; j < c.size(); j++)
-         {
-            Var const v = c[j].var();
+			for (int j = (p == Lit::Undef()) ? 0 : 1; j < c.size(); j++) {
+				Var const v = c[j].var();
 
-            if (!ig.isSeen(v) && ig.level(v) > 0)
-            {
-               ig.setSeen(v);
-               pathC += ig.level(v) >= conflictLevel;
-               ig.markSeenToClear(c[j]);
-            }
-         }
-      }
-      assert (pathC > 0);
-      // Select next clause to look at:
-      do
-      {
-         while (!ig.isSeen(ig.getTrailLit(--index).var()))
-            ;
-         p = ig.getTrailLit(index);
-      } while (ig.level((p.var())) < conflictLevel);
+				if (!ig.isSeen(v) && ig.level(v) > 0) {
+					ig.setSeen(v);
+					pathC += ig.level(v) >= conflictLevel;
+					ig.markSeenToClear(c[j]);
+				}
+			}
+		}
+		assert(pathC > 0);
+		// Select next clause to look at:
+		do {
+			while (!ig.isSeen(ig.getTrailLit(--index).var()))
+				;
+			p = ig.getTrailLit(index);
+		} while (ig.level((p.var())) < conflictLevel);
 
-      Var const pv = p.var();
-      cref = ig.reason(pv);
-      --pathC;
-   } while (pathC > 0);
-   outC[0] = ~p;
-   // Generate conflict clause:
-//   std::cout << "res:";
-//   ig.printClause(outC);
-   //
-   if (numSkipped > 0 && numResolvents > 1 && numResolvents > numBinResolvents)
-   {
-      // add lits from conflict clause:
-      Clause const & conflClause = ca[confl];
-      for (int i = 0; i < conflClause.size(); ++i)
-      {
-         int const lvl = ig.level(conflClause[i]);
-         if (lvl > 0 && lvl < conflictLevel)
-            outC.push(conflClause[i]);
-      }
-//      std::cout << "fin:";
-//      ig.printClause(outC);
+		Var const pv = p.var();
+		cref = ig.reason(pv);
+		--pathC;
+	} while (pathC > 0);
+	outC[0] = ~p;
+	if (numSkipped > 0 && numResolvents > 1
+			&& numResolvents > numBinResolvents) {
+		// add lits from conflict clause:
+		Clause const & conflClause = ca[confl];
+		for (int i = 0; i < conflClause.size(); ++i) {
+			int const lvl = ig.level(conflClause[i]);
+			if (lvl > 0 && lvl < conflictLevel)
+				outC.push(conflClause[i]);
+		}
 
+		lc.lbd = outC.size() - 1;   // inConflictMinimize.run(outC);
+		lc.isAsserting = false; //outC.size() == 1 || ig.level(outC[1]) < conflictLevel; // all but one lit were eliminated during minimize
+		// prepare for asserting
 
-      lc.lbd = inConflictMinimize.run(outC);
-      lc.isAsserting = outC.size() == 1 || ig.level(outC[1]) < conflictLevel;  // all but one lit were eliminated during minimize
-      // prepare for asserting
-
-      if (outC.size() > 1)
-      {
-         int max_i = 1;
-         for (int i = 2; i < outC.size(); i++)
-         {
-            if (ig.level(outC[i]) > ig.level(outC[max_i]))
-               max_i = i;
-            assert(ig.level(outC[i]) > 0);
-         }
-         std::swap(outC[1], outC[max_i]);
-      }
-      hasClause = true;
-   } else
-   {
-      hasClause = false;
-      outC.clear();
-   }
+		if (outC.size() > 1) {
+			int max_i = 1;
+			for (int i = 2; i < outC.size(); i++) {
+				if (ig.level(outC[i]) > ig.level(outC[max_i]))
+					max_i = i;
+				assert(ig.level(outC[i]) > 0);
+			}
+			std::swap(outC[1], outC[max_i]);
+		}
+		ig.verifyTracked(outC);
+		hasClause = true;
+	} else {
+		hasClause = false;
+		outC.clear();
+	}
 }
 
-template <typename Database>
-inline bool ConflictCore<Database>::hasLearntClause() const
-{
-   return hasClause;
+template<typename Database>
+inline bool ConflictCore<Database>::hasLearntClause() const {
+	return hasClause;
 }
 
-template <typename Database>
-inline const LearntClause<Database> & ConflictCore<Database>::getLearntClause()
-{
-   assert(hasClause);
-   hasClause = false;
-   return lc;
+template<typename Database>
+inline const LearntClause<Database> & ConflictCore<Database>::getLearntClause() {
+	assert(hasClause);
+	hasClause = false;
+	return lc;
 }
 }
 

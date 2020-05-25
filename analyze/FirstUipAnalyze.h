@@ -139,7 +139,7 @@ template <typename Callbacks>
 inline int FirstUipAnalyze<Propagate>::analyzeFistUip(CRef confl, Callbacks const & cb)
 {
    lc.c.clear();
-
+   ig.startTracking();
    int pathC = 0;
    int const conflictLvl = ig.level(ca[confl][0]);
    vec<Lit> & outC = lc.c;
@@ -171,6 +171,7 @@ inline int FirstUipAnalyze<Propagate>::analyzeFistUip(CRef confl, Callbacks cons
    int const index = ig.visitImplications(ig.nAssigns() - 1, confl, conflictLvl, onClauseVisit,
                                           onLitVisit, runFurther);
    outC[0] = ~ig.getTrailLit(index);
+   ig.verifyTracked(outC);
 
    lc.lbd = inConflictMinimize.run(outC) - 1;
 
@@ -188,6 +189,7 @@ inline int FirstUipAnalyze<Propagate>::analyzeFistUip(CRef confl, Callbacks cons
       std::swap(outC[1], outC[max_i]);
    }
    cb.onClauseCreated(outC);
+   ig.verifyTracked(outC);
 
    hasClause = true;
    lc.isAsserting = true;

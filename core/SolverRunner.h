@@ -246,11 +246,11 @@ class SolverRunner
    {
       switch (config.analyze)
       {
-//         case AnalyzeHeuristic::LEVELAWARE:
-//            LOG("Using laa")
-//            return runExchange<Connector, Database, Branch, Restart, Reduce, Propagate,
-//                  LevelAwareAnalyze<Propagate> >(config, threadData);
-//
+         case AnalyzeHeuristic::LEVELAWARE:
+            LOG("Using laa");
+            return runExchange<Connector, Database, Branch, Restart, Reduce, Propagate,
+                  LevelAwareAnalyze<Propagate> >(config, threadData);
+
 //         case AnalyzeHeuristic::MUIP:
 //            LOG("Using muip")
 //            return runExchange<Connector, Database, Branch, Restart, Reduce, Propagate,

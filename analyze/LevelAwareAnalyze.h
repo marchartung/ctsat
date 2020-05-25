@@ -123,6 +123,7 @@ inline void LevelAwareAnalyze<Propagate>::run(const CRef confl, const Callbacks&
       {
          if (cc.lc.isAsserting)
          {
+        	 assert(false);
             if (cc.lc.c.size() < FUA::lc.c.size())  // the cc clause is better than the fuip
                cc.lc.swap(FUA::lc);
             else if (cc.lc.c[0] == FUA::lc.c[0])

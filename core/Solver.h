@@ -281,6 +281,14 @@ class Solver
 
    bool repropagateCurrentSolution();
 
+   void check()
+   {
+		reduce.removeSatisfied([&](CRef const ref) {assert(!propEngine.isBadAttached(ref)); return false;});
+		for(int i=0;i<clauses.size();++i)
+			assert(!propEngine.isBadAttached(clauses[i]));
+		propEngine.checkUnique();
+   }
+
    void newVars(vec<bool> const & decisionVars)
    {
       assert(ig.nVars() == 0);

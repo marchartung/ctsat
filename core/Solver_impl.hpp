@@ -44,8 +44,7 @@
 
 //#define PRINT_OUT
 
-namespace ctsat
-{
+namespace ctsat {
 
 //=================================================================================================
 // Options:
@@ -53,235 +52,197 @@ namespace ctsat
 //=================================================================================================
 // Constructor/Destructor:
 
-template <typename TemplateConfig>
-Solver<TemplateConfig>::Solver(
-                               SolverConfig const & config,
-                               typename TemplateConfig::Connector & connector)
-      : useVivification(config.useVivification),
-        verbosity(config.verbosity),
-        garbage_frac(config.garbage_frac),
+template<typename TemplateConfig>
+Solver<TemplateConfig>::Solver(SolverConfig const & config,
+		typename TemplateConfig::Connector & connector) :
+		useVivification(config.useVivification), verbosity(config.verbosity), garbage_frac(
+				config.garbage_frac),
 
-        learntsize_factor(config.learntsize_factor),
-        learntsize_inc(config.learntsize_inc),
-        learntsize_adjust_start_confl(),
-        learntsize_adjust_inc(),
+		learntsize_factor(config.learntsize_factor), learntsize_inc(
+				config.learntsize_inc), learntsize_adjust_start_confl(), learntsize_adjust_inc(),
 
-        smode(),
-        randEngine(config.rnd_seed),
-        stat(),
-        drat(),
-        ca(),
-        ig(ca),
-        branch(
-              typename TemplateConfig::Branch::BranchInputArgs(config, smode, randEngine, stat, ca,
-                                                               ig)),
-        restart(config, smode, stat),
-        reduce(config, stat, ca, ig),
-        propEngine(stat, ca, ig),
-        analyze(config, ca, ig, propEngine),
-        vivification(config, ca, ig, propEngine),
-        exchange(config, stat, ca, ig, connector, propEngine),
-        ok(true),
-        asynch_interrupt(false),
-        remove_satisfied(config.remove_satisfied),
-        steady_simplify(config.onlyExportWhenMin),
-        clauses(),
+		smode(), randEngine(config.rnd_seed), stat(), drat(), ca(), ig(ca), branch(
+				typename TemplateConfig::Branch::BranchInputArgs(config, smode,
+						randEngine, stat, ca, ig)), restart(config, smode,
+				stat), reduce(config, stat, ca, ig), propEngine(stat, ca, ig), analyze(
+				config, ca, ig, propEngine), vivification(config, ca, ig,
+				propEngine), exchange(config, stat, ca, ig, connector,
+				propEngine), ok(true), asynch_interrupt(false), remove_satisfied(
+				config.remove_satisfied), steady_simplify(
+				config.onlyExportWhenMin), clauses(),
 
-        confl_to_chrono(config.confl_to_chrono),
-        chrono(config.chrono),
-        add_tmp(),
+		confl_to_chrono(config.confl_to_chrono), chrono(config.chrono), add_tmp(),
 
-        conflict_budget(config.conflict_budget),
-        propagation_budget(config.propagation_budget),
+		conflict_budget(config.conflict_budget), propagation_budget(
+				config.propagation_budget),
 
-        nbSimplifyAll(0),
+		nbSimplifyAll(0),
 
-        curSimplify(1),
-        nbconfbeforesimplify(config.nbconfbeforesimplify),
-        incSimplify(config.incSimplify)
-{
+		curSimplify(1), nbconfbeforesimplify(config.nbconfbeforesimplify), incSimplify(
+				config.incSimplify) {
 }
 
-template <typename TemplateConfig>
-Solver<TemplateConfig>::Solver(
-                               SolverConfig const & config,
-                               typename TemplateConfig::Connector & connector,
-                               SatInstance const & inst)
-      : Solver(config, connector, inst.isDecisionVar, inst.ca, inst.clauses)
-{
+template<typename TemplateConfig>
+Solver<TemplateConfig>::Solver(SolverConfig const & config,
+		typename TemplateConfig::Connector & connector,
+		SatInstance const & inst) :
+		Solver(config, connector, inst.isDecisionVar, inst.ca, inst.clauses) {
 }
 
-template <typename TemplateConfig>
-Solver<TemplateConfig>::Solver(
-                               SolverConfig const & config,
-                               typename TemplateConfig::Connector & connector,
-                               SatInstance && inst)
-      : Solver(config, connector, inst.isDecisionVar, std::move(inst.ca), std::move(inst.clauses),
-               std::move(inst.drat))
-{
+template<typename TemplateConfig>
+Solver<TemplateConfig>::Solver(SolverConfig const & config,
+		typename TemplateConfig::Connector & connector, SatInstance && inst) :
+		Solver(config, connector, inst.isDecisionVar, std::move(inst.ca),
+				std::move(inst.clauses), std::move(inst.drat)) {
 }
 
-template <typename TemplateConfig>
-void Solver<TemplateConfig>::attachClauses()
-{
-   for (int i = 0; i < clauses.size(); ++i)
-      propEngine.attachClause(clauses[i]);
+template<typename TemplateConfig>
+void Solver<TemplateConfig>::attachClauses() {
+	for (int i = 0; i < clauses.size(); ++i)
+	{
+		propEngine.attachClause(clauses[i]);
+		assert(!propEngine.isBadAttached(clauses[i]));
+	}
 }
 
-template <typename TemplateConfig>
-Solver<TemplateConfig>::Solver(
-                               SolverConfig const & config,
-                               typename TemplateConfig::Connector & connector,
-                               vec<bool> const & decisionVars,
-                               Database && db,
-                               vec<CRef> && clauses,
-                               DratPrint<Lit> && drat)
-      : Solver(config, connector)
-{
-   this->drat = std::move(drat);
-   newVars(decisionVars);
-   this->clauses = std::move(clauses);
-   ca = std::move(db);
-   for (int i = 0; i < clauses.size(); ++i)
-   {
-      Clause const & c = ca[clauses[i]];
-      for (int j = 0; j < c.size(); ++j)
-         assert(ig.value(c[j]).isUndef());
-   }
-   attachClauses();
+template<typename TemplateConfig>
+Solver<TemplateConfig>::Solver(SolverConfig const & config,
+		typename TemplateConfig::Connector & connector,
+		vec<bool> const & decisionVars, Database && db, vec<CRef> && clauses,
+		DratPrint<Lit> && drat) :
+		Solver(config, connector) {
+	this->drat = std::move(drat);
+	newVars(decisionVars);
+	this->clauses = std::move(clauses);
+	ca = std::move(db);
+	for (int i = 0; i < clauses.size(); ++i) {
+		Clause const & c = ca[clauses[i]];
+		for (int j = 0; j < c.size(); ++j)
+			assert(ig.value(c[j]).isUndef());
+	}
+	attachClauses();
 }
 // copy from SatInstance
-template <typename TemplateConfig>
-Solver<TemplateConfig>::Solver(
-                               SolverConfig const & config,
-                               typename TemplateConfig::Connector & connector,
-                               vec<bool> const & decisionVars,
-                               decltype(SatInstance::ca) const & db,
-                               vec<decltype(SatInstance::ca)::CRef> const & clauses)
-      : Solver(config, connector)
-{
-   assert(this->clauses.size() == 0);
+template<typename TemplateConfig>
+Solver<TemplateConfig>::Solver(SolverConfig const & config,
+		typename TemplateConfig::Connector & connector,
+		vec<bool> const & decisionVars, decltype(SatInstance::ca) const & db,
+		vec<decltype(SatInstance::ca)::CRef> const & clauses) :
+		Solver(config, connector) {
+	assert(this->clauses.size() == 0);
 
-   newVars(decisionVars);
-   for (int i = 0; i < clauses.size(); ++i)
-   {
-      CRef const ref = ca.alloc(db[clauses[i]], false);
-      this->clauses.push(ref);
-      Clause const & c = ca[ref];
-      for (int j = 0; j < c.size(); ++j)
-         assert(ig.value(c[j]).isUndef());
-      propEngine.attachClause(ref);
-   }
+	newVars(decisionVars);
+	for (int i = 0; i < clauses.size(); ++i) {
+		CRef const ref = ca.alloc(db[clauses[i]], false);
+		this->clauses.push(ref);
+		Clause const & c = ca[ref];
+		for (int j = 0; j < c.size(); ++j)
+			assert(ig.value(c[j]).isUndef());
+		propEngine.attachClause(ref);
+	}
 }
 
-template <typename TemplateConfig>
-Solver<TemplateConfig>::~Solver()
-{
+template<typename TemplateConfig>
+Solver<TemplateConfig>::~Solver() {
 }
 
-template <typename TemplateConfig>
-bool Solver<TemplateConfig>::removed(CRef cr)
-{
-   return ca[cr].mark() == 1;
+template<typename TemplateConfig>
+bool Solver<TemplateConfig>::removed(CRef cr) {
+	return ca[cr].mark() == 1;
 }
 
-template <typename TemplateConfig>
-void Solver<TemplateConfig>::setModel(vec<lbool> & model, vec<bool> const & isDecisionVar)
-{
-   LOG("setting model");
-   assert(ig.nVars() <= model.size());
-   for (Var i = 0; i < ig.nAssigns(); ++i)
-   {
-      Var const v = ig.getTrailLit(i).var();
-      assert(isDecisionVar[v]);
-      model[v] = ig.value(v);
-   }
+template<typename TemplateConfig>
+void Solver<TemplateConfig>::setModel(vec<lbool> & model,
+		vec<bool> const & isDecisionVar) {
+	LOG("setting model");
+	assert(ig.nVars() <= model.size());
+	for (Var i = 0; i < ig.nAssigns(); ++i) {
+		Var const v = ig.getTrailLit(i).var();
+		assert(isDecisionVar[v]);
+		model[v] = ig.value(v);
+	}
 }
 
 // return true, if the clause cr should be removed
-template <typename TemplateConfig>
-bool Solver<TemplateConfig>::simplifyClause(CRef const & cr)
-{
-   Clause & c = ca[cr];
-   if (removed(cr) || ig.satisfied(c))
-   {
-      ca.remove(cr);
-      return true;
-   } else if (c.simplified())
-      return false;
-   else
-   {
-//      if (!propEngine.isAttached(cr))  //TODO
-//         std::cout << "is bad attached: " << propEngine.isBadAttached(cr) << "\n";
-      propEngine.detachClause(cr, true);
-      if (vivification.run(c))
-         drat.addClause(c);
+template<typename TemplateConfig>
+bool Solver<TemplateConfig>::simplifyClause(CRef const & cr) {
+	volatile CRef const rb = cr;
+	Clause & c = ca[cr];
+	void const * debugP = &c;
+	if (removed(cr) || ig.satisfied(c)) {
+		ca.remove(cr);
+		return true;
+	} else if (c.simplified())
+		return false;
+	else {
+		assert(!propEngine.isBadAttached(cr));
 
-      assert(c.size() > 0);
-      if (c.size() == 1)
-      {
-         exchange.unitLearnt(c[0]);
-         uncheckedEnqueue(c[0]);
-         if (propagate() != CRef_Undef)
-         {
-            return setOk(false);
-         }
-         ca.remove(cr);
-         return true;
-      } else
-      {
-         propEngine.attachClause(cr);
-         c.setSimplified(true);
-         reduce.clauseImproved(cr);
+		propEngine.detachClause(cr, true);
+		assert(!propEngine.isAttached(cr));
+		if (vivification.run(c))
+			drat.addClause(c);
+		assert(cr == rb);
+		assert(c.size() > 0);
+		assert(debugP == &ca[cr]);
+		if (c.size() == 1) {
+			exchange.unitLearnt(c[0]);
+			uncheckedEnqueue(c[0]);
+			if (propagate() != CRef_Undef) {
+				return setOk(false);
+			}
+			ca.remove(cr);
+			return true;
+		} else {
+			propEngine.attachClause(cr);
+			c.setSimplified(true);
+			reduce.clauseImproved(cr);
 
-      }
-   }
-   return false;
+		}
+	}
+	return false;
 }
 
-template <typename TemplateConfig>
-inline bool Solver<TemplateConfig>::simplifyAll()
-{
-   assert(isOk());
-   // simplify
-   //
-   if (useVivification && stat.conflicts >= curSimplify * nbconfbeforesimplify)
-   {
-      LOG("Simplifies clauses");
-      if (propagate() != CRef_Undef)
-         setOk(false);
-      else
-      {
-         ++nbSimplifyAll;
+template<typename TemplateConfig>
+inline bool Solver<TemplateConfig>::simplifyAll() {
+	assert(isOk());
+	// simplify
+	//
+	if (useVivification
+			&& stat.conflicts >= curSimplify * nbconfbeforesimplify) {
+		LOG("Simplifies clauses");
+		if (propagate() != CRef_Undef)
+			setOk(false);
+		else {
+			++nbSimplifyAll;
 
-         reduce.applyRemoveGoodClauses([&](CRef const & cr)
-         {
-            if (withinBudget() && isOk())
-            {
-               // ensure polling import clauses also when load on simplification is high
-               if (exchange.shouldFetch())
-               exchange.fetchClauses();
-               return simplifyClause(cr);
-            }
-            else
-            return false;
-         });
-         checkGarbage();
-         if (steady_simplify)
-         {
-            nbconfbeforesimplify = stat.conflicts * 10ul * nbconfbeforesimplify;
-            assert(curSimplify == 1);
-         } else
-         {
-            curSimplify = (stat.conflicts / nbconfbeforesimplify) + 1;
-            nbconfbeforesimplify += incSimplify;
-         }
-      }
+			reduce.applyRemoveGoodClauses([&](CRef const & cr)
+			{
+				if (withinBudget() && isOk())
+				{
+					// ensure polling import clauses also when load on simplification is high
+					if (exchange.shouldFetch())
+					exchange.fetchClauses();
+					return simplifyClause(cr);
+				}
+				else
+				return false;
+			});
+			checkGarbage();
+			if (steady_simplify) {
+				nbconfbeforesimplify = stat.conflicts * 10ul
+						* nbconfbeforesimplify;
+				assert(curSimplify == 1);
+			} else {
+				curSimplify = (stat.conflicts / nbconfbeforesimplify) + 1;
+				nbconfbeforesimplify += incSimplify;
+			}
+		}
 
-      LOG("Simplify finished");
-   }
+		LOG("Simplify finished");
+	}
 
-   return isOk();
+//	check();
+	return isOk();
 }
 
 //=================================================================================================
@@ -291,136 +252,123 @@ inline bool Solver<TemplateConfig>::simplifyAll()
 // used as a decision variable (NOTE! This has effects on the meaning of a SATISFIABLE result).
 //
 
-template <typename TemplateConfig>
-inline typename Solver<TemplateConfig>::Var Solver<TemplateConfig>::newVar(bool const dvar)
-{
-   Var const v = branch.newVar(dvar);
-   ig.newVar();
-   branch.setDecisionVar(v, dvar);
-   propEngine.newVar();
-   return v;
+template<typename TemplateConfig>
+inline typename Solver<TemplateConfig>::Var Solver<TemplateConfig>::newVar(
+		bool const dvar) {
+	Var const v = branch.newVar(dvar);
+	ig.newVar();
+	branch.setDecisionVar(v, dvar);
+	propEngine.newVar();
+	return v;
 }
 
-template <typename TemplateConfig>
-void Solver<TemplateConfig>::removeVar(Var const v)
-{
-   propEngine.removeVar(v);
+template<typename TemplateConfig>
+void Solver<TemplateConfig>::removeVar(Var const v) {
+	propEngine.removeVar(v);
 }
-
-template <typename TemplateConfig>
-void Solver<TemplateConfig>::removeClause(CRef const cr)
-{
-   Clause& c = ca[cr];
-   if (c.mark() != 1)
-      drat.removeClause(c);  // FIXME drat must be in database
-
-   propEngine.detachClause(cr);
+//1 5449
+template<typename TemplateConfig>
+void Solver<TemplateConfig>::removeClause(CRef const cr) {
+	Clause& c = ca[cr];
+	if (c.mark() != 1)
+		drat.removeClause(c);  // FIXME drat must be in database
+	propEngine.detachClause(cr);
 // Don't leave pointers to free'd memory!
-   if (ig.locked(c))
-   {
-      Lit implied = c.size() != 2 ? c[0] : (ig.value(c[0]).isTrue() ? c[0] : c[1]);
-      ig.reason(implied) = CRef_Undef;
-   }
-   ca.remove(cr);
+	if (ig.locked(c)) {
+		Lit implied =
+				c.size() != 2 ? c[0] : (ig.value(c[0]).isTrue() ? c[0] : c[1]);
+		ig.reason(implied) = CRef_Undef;
+	}
+	ca.remove(cr);
 }
 
-template <typename TemplateConfig>
+template<typename TemplateConfig>
 inline typename Solver<TemplateConfig>::ConflictData Solver<TemplateConfig>::FindConflictLevel(
-                                                                                               CRef cind)
-{
-   ConflictData data;
-   Clause& conflCls = ca[cind];
-   data.nHighestLevel = ig.level(conflCls[0]);
-   if (data.nHighestLevel == ig.decisionLevel() && ig.level(conflCls[1]) == ig.decisionLevel())
-   {
-      return data;
-   }
+		CRef cind) {
+	ConflictData data;
+	Clause& conflCls = ca[cind];
+	data.nHighestLevel = ig.level(conflCls[0]);
+	if (data.nHighestLevel == ig.decisionLevel()
+			&& ig.level(conflCls[1]) == ig.decisionLevel()) {
+		return data;
+	}
 
-   int highestId = 0;
-   data.bOnlyOneLitFromHighest = true;
+	int highestId = 0;
+	data.bOnlyOneLitFromHighest = true;
 // find the largest decision level in the clause
-   for (int nLitId = 1; nLitId < conflCls.size(); ++nLitId)
-   {
-      int const nLevel = ig.level(conflCls[nLitId]);
-      if (nLevel > data.nHighestLevel)
-      {
-         highestId = nLitId;
-         data.nHighestLevel = nLevel;
-         data.bOnlyOneLitFromHighest = true;
-      } else if (nLevel == data.nHighestLevel && data.bOnlyOneLitFromHighest == true)
-         data.bOnlyOneLitFromHighest = false;
+	for (int nLitId = 1; nLitId < conflCls.size(); ++nLitId) {
+		int const nLevel = ig.level(conflCls[nLitId]);
+		if (nLevel > data.nHighestLevel) {
+			highestId = nLitId;
+			data.nHighestLevel = nLevel;
+			data.bOnlyOneLitFromHighest = true;
+		} else if (nLevel == data.nHighestLevel
+				&& data.bOnlyOneLitFromHighest == true)
+			data.bOnlyOneLitFromHighest = false;
 
-   }
+	}
 
-   if (highestId != 0)
-      propEngine.swapWatched(cind, 0, highestId);
-   if (data.bOnlyOneLitFromHighest)
-   {
-      int secondHighest = ig.level(conflCls[1]);
-      highestId = 1;
-      for (int nLitId = 1; nLitId < conflCls.size(); ++nLitId)
-      {
-         int const nLevel = ig.level(conflCls[nLitId]);
-         if (nLevel > secondHighest)
-         {
-            highestId = nLitId;
-            secondHighest = nLevel;
-         }
-      }
-      if (highestId != 1)
-         propEngine.swapWatched(cind, 1, highestId);
-      assert(ig.level(conflCls[1]) < ig.level(conflCls[0]));
-      for (int i = 2; i < conflCls.size(); ++i)
-         assert(ig.level(conflCls[i]) <= ig.level(conflCls[1]));
-   }
+	if (highestId != 0)
+		propEngine.swapWatched(cind, 0, highestId);
+	if (data.bOnlyOneLitFromHighest) {
+		int secondHighest = ig.level(conflCls[1]);
+		highestId = 1;
+		for (int nLitId = 1; nLitId < conflCls.size(); ++nLitId) {
+			int const nLevel = ig.level(conflCls[nLitId]);
+			if (nLevel > secondHighest) {
+				highestId = nLitId;
+				secondHighest = nLevel;
+			}
+		}
+		if (highestId != 1)
+			propEngine.swapWatched(cind, 1, highestId);
+		assert(ig.level(conflCls[1]) < ig.level(conflCls[0]));
+		for (int i = 2; i < conflCls.size(); ++i)
+			assert(ig.level(conflCls[i]) <= ig.level(conflCls[1]));
+	}
 
-   return data;
+	return data;
 }
 
-template <typename TemplateConfig>
-inline bool Solver<TemplateConfig>::repropagateCurrentSolution()
-{
-   vec<Lit> trail;
-   for (int i = 0; i < ig.nAssigns(); ++i)
-      trail.push(ig.getTrailLit(i));
-   ig.clearTrail();
-   for (int i = 0; i < trail.size(); ++i)
-      uncheckedEnqueue(trail[i]);
-   CRef const confl = propagate();
-   return confl == Database::npos();
+template<typename TemplateConfig>
+inline bool Solver<TemplateConfig>::repropagateCurrentSolution() {
+	vec<Lit> trail;
+	for (int i = 0; i < ig.nAssigns(); ++i)
+		trail.push(ig.getTrailLit(i));
+	ig.clearTrail();
+	for (int i = 0; i < trail.size(); ++i)
+		uncheckedEnqueue(trail[i]);
+	CRef const confl = propagate();
+	return confl == Database::npos();
 }
 
-template <typename TemplateConfig>
-inline void Solver<TemplateConfig>::clauseUsedInConflict(CRef const ref)
-{
-   reduce.clauseUsedInConflict(ref);
-   exchange.clauseUsedInConflict(ref);
+template<typename TemplateConfig>
+inline void Solver<TemplateConfig>::clauseUsedInConflict(CRef const ref) {
+	reduce.clauseUsedInConflict(ref);
+	exchange.clauseUsedInConflict(ref);
 }
 
-template <typename TemplateConfig>
-inline void Solver<TemplateConfig>::varUsedInConflict(Var const v)
-{
-   branch.notifyVarSeenInConflict(v);
+template<typename TemplateConfig>
+inline void Solver<TemplateConfig>::varUsedInConflict(Var const v) {
+	branch.notifyVarSeenInConflict(v);
 }
-template <typename TemplateConfig>
-inline void Solver<TemplateConfig>::clauseCreatedInConflict(vec<Lit> const & c)
-{
-   branch.notifyCreatedLearntClause(c);
+template<typename TemplateConfig>
+inline void Solver<TemplateConfig>::clauseCreatedInConflict(
+		vec<Lit> const & c) {
+	branch.notifyCreatedLearntClause(c);
 }
 
-template <typename TemplateConfig>
-void Solver<TemplateConfig>::removeSatisfied(vec<CRef>& cs)
-{
-   int i, j;
-   for (i = j = 0; i < cs.size(); i++)
-   {
-      Clause& c = ca[cs[i]];
-      if (ig.satisfied(c))
-         removeClause(cs[i]);
-      else
-         cs[j++] = cs[i];
-   }
-   cs.shrink(i - j);
+template<typename TemplateConfig>
+void Solver<TemplateConfig>::removeSatisfied(vec<CRef>& cs) {
+	int i, j;
+	for (i = j = 0; i < cs.size(); i++) {
+		Clause& c = ca[cs[i]];
+		if (ig.satisfied(c))
+			removeClause(cs[i]);
+		else
+			cs[j++] = cs[i];
+	}
+	cs.shrink(i - j);
 }
 
 /*_________________________________________________________________________________________________
@@ -431,227 +379,200 @@ void Solver<TemplateConfig>::removeSatisfied(vec<CRef>& cs)
  |    Simplify the clause database according to the current top-level assigment. Currently, the only
  |    thing done here is the removal of satisfied clauses, but more things can be put here.
  |________________________________________________________________________________________________@*/
-template <typename TemplateConfig>
-bool Solver<TemplateConfig>::simplify()
-{
-   assert(ig.decisionLevel() == 0);
+template<typename TemplateConfig>
+bool Solver<TemplateConfig>::simplify() {
+	assert(ig.decisionLevel() == 0);
 
-   if (!isOk() || propagate() != CRef_Undef)
-   {
-      return setOk(false);
-   }
+	if (!isOk() || propagate() != CRef_Undef) {
+		return setOk(false);
+	}
 
-   if (nAssigns() == stat.simpDB_assigns || (stat.simpDB_props > 0))
-      return true;
-
+	if (nAssigns() == stat.simpDB_assigns || (stat.simpDB_props > 0))
+		return true;
+//	check();
 // Remove satisfied clauses:
-   reduce.removeSatisfied([&](CRef const & ref)
-   {  removeClause(ref);});
-   if (remove_satisfied)
-      removeSatisfied(clauses);
-   checkGarbage();
-   branch.rebuildOrderHeap();
+	reduce.removeSatisfied([&](CRef const & ref)
+	{	removeClause(ref);});
+	if (remove_satisfied)
+		removeSatisfied(clauses);
+	checkGarbage();
+	branch.rebuildOrderHeap();
+	check();
 
-   stat.simpDB_assigns = nAssigns();
-   stat.simpDB_props = stat.clauses_literals + stat.learnts_literals;  // (shouldn't depend on stats really, but it will do for now)
+	stat.simpDB_assigns = nAssigns();
+	stat.simpDB_props = stat.clauses_literals + stat.learnts_literals; // (shouldn't depend on stats really, but it will do for now)
 
-   return true;
+	return true;
 }
 
-template <typename TemplateConfig>
-bool Solver<TemplateConfig>::importClauses()
-{
+template<typename TemplateConfig>
+bool Solver<TemplateConfig>::importClauses() {
 LOG("Imports clauses")
-                                 assert(ig.decisionLevel() == 0);
-   Lit u;
-   bool attached;
-   CRef ref;
-   exchange.fetchClauses();
-   while ((u = exchange.getImportUnit()) != Lit::Undef())
-      if (!enqueue(u))
-         return setOk(false);
-   while (std::get<1>((std::tie(attached, ref) = exchange.getImportClause())) != Database::npos())
-   {
-      reduce.addClause(ref);
-      if (!attached
-         && propEngine.safeAttachClause(ref) < ig.nVars()
-         && ig.value(ca[ref][0]).isUndef())
-      {
-         uncheckedEnqueue(ca[ref][0], ref, 0);
-         if (propagate() != Database::npos())
-            return setOk(false);
-      }
-   }
-   LOG("Imports clauses end")
-   return exchange.isOk();
+                                 	assert(ig.decisionLevel() == 0);
+	Lit u;
+	bool attached;
+	CRef ref;
+	exchange.fetchClauses();
+	while ((u = exchange.getImportUnit()) != Lit::Undef())
+		if (!enqueue(u))
+			return setOk(false);
+	while (std::get<1>((std::tie(attached, ref) = exchange.getImportClause()))
+			!= Database::npos()) {
+		reduce.addClause(ref);
+		if (!attached && propEngine.safeAttachClause(ref) < ig.nVars()
+				&& ig.value(ca[ref][0]).isUndef()) {
+			uncheckedEnqueue(ca[ref][0], ref, 0);
+			if (propagate() != Database::npos())
+				return setOk(false);
+		}
+	}
+	LOG("Imports clauses end")
+	return exchange.isOk();
 }
-template <typename TemplateConfig>
-inline int Solver<TemplateConfig>::getBacktrackLevel(
-                                                     int const highestLevel,
-                                                     int const assertingLevel)
-{
-   bool const shouldChrono = (confl_to_chrono < 0
-      || static_cast<unsigned>(confl_to_chrono) <= stat.conflicts)
-      && chrono > -1
-      && (ig.decisionLevel() - assertingLevel) >= chrono;
-   int backtrackLevel = assertingLevel;
+template<typename TemplateConfig>
+inline int Solver<TemplateConfig>::getBacktrackLevel(int const highestLevel,
+		int const assertingLevel) {
+	bool const shouldChrono = (confl_to_chrono < 0
+			|| static_cast<unsigned>(confl_to_chrono) <= stat.conflicts)
+			&& chrono > -1 && (ig.decisionLevel() - assertingLevel) >= chrono;
+	int backtrackLevel = assertingLevel;
 
-   if (shouldChrono)
-   {
-      backtrackLevel = highestLevel - 1;
-      ++stat.chrono_backtrack;
-   }
-   stat.non_chrono_backtrack += !shouldChrono;
+	if (shouldChrono) {
+		backtrackLevel = highestLevel - 1;
+		++stat.chrono_backtrack;
+	}
+	stat.non_chrono_backtrack += !shouldChrono;
 //   LOG("Backtrack to " + std::to_string(backtrackLevel))
-   return backtrackLevel;
+	return backtrackLevel;
 }
 
-template <typename VarVisit, typename ClauseVisit, typename ClauseCreated>
-struct AnalyseCallbacks
-{
-   VarVisit const onVarVisit;
-   ClauseVisit const onClauseVisit;
-   ClauseCreated const onClauseCreated;
+template<typename VarVisit, typename ClauseVisit, typename ClauseCreated>
+struct AnalyseCallbacks {
+	VarVisit const onVarVisit;
+	ClauseVisit const onClauseVisit;
+	ClauseCreated const onClauseCreated;
 
-   AnalyseCallbacks(
-                    VarVisit const & onVarVisit,
-                    ClauseVisit const & onClauseVisit,
-                    ClauseCreated const & onClauseCreated);
+	AnalyseCallbacks(VarVisit const & onVarVisit,
+			ClauseVisit const & onClauseVisit,
+			ClauseCreated const & onClauseCreated);
 };
-template <typename VarVisit, typename ClauseVisit, typename ClauseCreated>
+template<typename VarVisit, typename ClauseVisit, typename ClauseCreated>
 inline AnalyseCallbacks<VarVisit, ClauseVisit, ClauseCreated>::AnalyseCallbacks(
-                                                                                VarVisit const & onVarVisit,
-                                                                                ClauseVisit const & onClauseVisit,
-                                                                                ClauseCreated const & onClauseCreated)
-      : onVarVisit(onVarVisit),
-        onClauseVisit(onClauseVisit),
-        onClauseCreated(onClauseCreated)
-{
+		VarVisit const & onVarVisit, ClauseVisit const & onClauseVisit,
+		ClauseCreated const & onClauseCreated) :
+		onVarVisit(onVarVisit), onClauseVisit(onClauseVisit), onClauseCreated(
+				onClauseCreated) {
 }
 
 // C++11 workarround:
-template <typename VarVisit, typename ClauseVisit, typename ClauseCreated>
+template<typename VarVisit, typename ClauseVisit, typename ClauseCreated>
 inline AnalyseCallbacks<VarVisit, ClauseVisit, ClauseCreated> getCallbacks(
-                                                                           VarVisit const & onVarVisit,
-                                                                           ClauseVisit const & onClauseVisit,
-                                                                           ClauseCreated const & onClauseCreated)
-{
-   return AnalyseCallbacks<VarVisit, ClauseVisit, ClauseCreated>(onVarVisit, onClauseVisit,
-                                                                 onClauseCreated);
+		VarVisit const & onVarVisit, ClauseVisit const & onClauseVisit,
+		ClauseCreated const & onClauseCreated) {
+	return AnalyseCallbacks<VarVisit, ClauseVisit, ClauseCreated>(onVarVisit,
+			onClauseVisit, onClauseCreated);
 }
 
-template <typename TemplateConfig>
-inline bool Solver<TemplateConfig>::resolveConflict(CRef const confl)
-{
-   auto const callbacks = getCallbacks([&](Var const v)
-   {  varUsedInConflict(v);},
-                                       [&](CRef const cref)
-                                       {  clauseUsedInConflict(cref);},
-                                       [&](vec<Lit> const & c)
-                                       {  clauseCreatedInConflict(c);});
-   LOG("Conflict found")
-   int assertingLevel;
-   analyzeAssertions.clear();
-   reduce.adjustOnConflict();
-   branch.notifyConflictFound1(confl);
-   restart.notifyConflictFound();
+template<typename TemplateConfig>
+inline bool Solver<TemplateConfig>::resolveConflict(CRef const confl) {
+	auto const callbacks = getCallbacks([&](Var const v)
+	{	varUsedInConflict(v);}, [&](CRef const cref)
+	{	clauseUsedInConflict(cref);}, [&](vec<Lit> const & c)
+	{	clauseCreatedInConflict(c);});
+	LOG("Conflict found")
+	int assertingLevel;
+	analyzeAssertions.clear();
+	reduce.adjustOnConflict();
+	branch.notifyConflictFound1(confl);
+	restart.notifyConflictFound();
 
-   ConflictData const conflInfo = FindConflictLevel(confl);
+	ConflictData const conflInfo = FindConflictLevel(confl);
 //   LOG("Conflict level " + std::to_string(conflInfo.nHighestLevel))
-   if (conflInfo.nHighestLevel == 0)
-   {
-      LOG("Level 0 conflict")
-      return setOk(false);
-   }
+	if (conflInfo.nHighestLevel == 0) {
+		LOG("Level 0 conflict")
+		return setOk(false);
+	}
 
-   if (conflInfo.bOnlyOneLitFromHighest)
-   {
-      Clause const & c = ca[confl];
-      analyzeAssertions.emplace_back(ig.level(c[1]), c[0], confl);
-      assertingLevel = analyzeAssertions.back().level;
-   } else
-   {
+	if (conflInfo.bOnlyOneLitFromHighest) {
+		Clause const & c = ca[confl];
+		analyzeAssertions.emplace_back(ig.level(c[1]), c[0], confl);
+		assertingLevel = analyzeAssertions.back().level;
+	} else {
 
-      branch.notifyConflictFound2(confl);
+		branch.notifyConflictFound2(confl);
 
-      analyze.run(confl, callbacks);
-      assertingLevel = addLearntClauses();
+		analyze.run(confl, callbacks);
+		assertingLevel = addLearntClauses();
 
-      branch.notifyConflictResolved();
-      reduce.notifyConflictResolved();
-   }
-   cancelUntil(getBacktrackLevel(conflInfo.nHighestLevel, assertingLevel));
-   stat.level_backtracked += conflInfo.nHighestLevel - ig.decisionLevel();
+		branch.notifyConflictResolved();
+		reduce.notifyConflictResolved();
+	}
+	cancelUntil(getBacktrackLevel(conflInfo.nHighestLevel, assertingLevel));
+	stat.level_backtracked += conflInfo.nHighestLevel - ig.decisionLevel();
 
-   assert(analyzeAssertions.size() > 0);
-   for (auto const & prop : analyzeAssertions)
-      if (prop.level <= ig.decisionLevel() && ig.value(prop.l).isUndef())
-      {
-         if (prop.cr != Database::npos())
-         {
-            Clause const & c = ca[prop.cr];
-            assert(prop.l == c[0]);
-            for (int i = 1; i < c.size(); ++i)
-               assert(ig.value(c[i]).isFalse());
-         }
-         uncheckedEnqueue(prop.l, prop.level, prop.cr);
-      }
-   exchange.conflictFound();
-   LOG("Conflict resolved")
-   return true;
+	assert(analyzeAssertions.size() > 0);
+	for (auto const & prop : analyzeAssertions)
+		if (prop.level <= ig.decisionLevel() && ig.value(prop.l).isUndef()) {
+			if (prop.cr != Database::npos()) {
+				Clause const & c = ca[prop.cr];
+				assert(prop.l == c[0]);
+				for (int i = 1; i < c.size(); ++i)
+					assert(ig.value(c[i]).isFalse());
+			}
+			uncheckedEnqueue(prop.l, prop.level, prop.cr);
+		}
+	exchange.conflictFound();
+	LOG("Conflict resolved")
+	return true;
 }
 
-template <typename TemplateConfig>
-inline int Solver<TemplateConfig>::addLearntClauses()
-{
-   int assertingLevel = ig.decisionLevel(), lbd = std::numeric_limits<int>::max(), nAdded = 0;
-   assert(analyze.hasLearntClause());
+template<typename TemplateConfig>
+inline int Solver<TemplateConfig>::addLearntClauses() {
+	int assertingLevel = ig.decisionLevel(), lbd =
+			std::numeric_limits<int>::max(), nAdded = 0;
+	assert(analyze.hasLearntClause());
 
-   while (analyze.hasLearntClause())
-   {
-      LearntClause<Database> const & lc = analyze.getLearntClause();
-      CRef const cr = addLearnt(lc, nAdded != 0);
-      ++nAdded;
-      if (lc.isAsserting)
-      {
-         assert(nAdded == 1);;
-         analyzeAssertions.emplace_back(((lc.c.size() > 1) ? ig.level(lc.c[1]) : 0), lc.c[0], cr);
-         for(int i=0;i<lc.c.size();++i)
-            assert(ig.level(lc.c[i]) > 0 || lc.c.size() == 1);
-         assertingLevel = std::min(assertingLevel, analyzeAssertions.back().level);
-         assert(
-               analyzeAssertions.back().level > 0
-                  || analyzeAssertions.back().cr == Database::npos());
-         lbd = std::min(lbd, lc.lbd);
-      }
-   }
+	while (analyze.hasLearntClause()) {
+		LearntClause<Database> const & lc = analyze.getLearntClause();
+		CRef const cr = addLearnt(lc, nAdded != 0);
+		++nAdded;
+		if (lc.isAsserting) {
+			analyzeAssertions.emplace_back(
+					((lc.c.size() > 1) ? ig.level(lc.c[1]) : 0), lc.c[0], cr);
+			for (int i = 0; i < lc.c.size(); ++i)
+				assert(ig.level(lc.c[i]) > 0 || lc.c.size() == 1);
+			assertingLevel = std::min(assertingLevel,
+					analyzeAssertions.back().level);
+			assert(
+					analyzeAssertions.back().level > 0
+							|| analyzeAssertions.back().cr == Database::npos());
+			lbd = std::min(lbd, lc.lbd);
+		}
+	}
 
 //   LOG("Added " + std::to_string(nAdded) + " clauses")
-   stat.nAdditionalLearnt += nAdded - 1;
-   restart.clauseLearnt(lbd);  // only use heuristic on one clause
-   return assertingLevel;
+	stat.nAdditionalLearnt += nAdded - 1;
+	restart.clauseLearnt(lbd);  // only use heuristic on one clause
+	return assertingLevel;
 }
 
-template <typename TemplateConfig>
+template<typename TemplateConfig>
 typename Solver<TemplateConfig>::CRef Solver<TemplateConfig>::addLearnt(
-                                                                        LearntClause<Database> const & lc,
-                                                                        bool const additional)
-{
-   CRef cr = Database::npos();
-   drat.addClause(lc.c);
-   if (lc.c.size() == 1)
-      exchange.unitLearnt(lc.c[0]);
-   else
-   {
-      cr = ca.alloc(lc.c, true);
-      Clause & c = ca[cr];
-      c.set_lbd(lc.lbd);
-      c.setSimplified(additional);
-      propEngine.attachClause(cr);
-      reduce.addClause(cr);
-      exchange.clauseLearnt(cr);
-   }
-   return cr;
+		LearntClause<Database> const & lc, bool const additional) {
+	CRef cr = Database::npos();
+	drat.addClause(lc.c);
+	if (lc.c.size() == 1)
+		exchange.unitLearnt(lc.c[0]);
+	else {
+		cr = ca.alloc(lc.c, true);
+		Clause & c = ca[cr];
+		c.set_lbd(lc.lbd);
+		c.setSimplified(additional);
+		propEngine.attachClause(cr);
+		reduce.addClause(cr);
+		exchange.clauseLearnt(cr);
+	}
+	return cr;
 }
 
 /*_________________________________________________________________________________________________
@@ -666,167 +587,156 @@ typename Solver<TemplateConfig>::CRef Solver<TemplateConfig>::addLearnt(
  |    all variables are decision variables, this means that the clause set is satisfiable. 'l_False'
  |    if the clause set is unsatisfiable. 'l_Undef' if the bound on number of conflicts is reached.
  |________________________________________________________________________________________________@*/
-template <typename TemplateConfig>
-typename Solver<TemplateConfig>::lbool Solver<TemplateConfig>::search()
-{
-   assert(isOk());
-   bool firstAfterConflict = false;
-   while (true)
-   {
-      CRef const confl = propagate();
+template<typename TemplateConfig>
+typename Solver<TemplateConfig>::lbool Solver<TemplateConfig>::search() {
+	assert(isOk());
+	bool firstAfterConflict = true;
+	while (true) {
+		CRef const confl = propagate();
 
-      if (confl != CRef_Undef)
-      {
-         ++stat.conflicts;
-         if (verbosity > 0 && stat.conflicts % 20000 == 0)
-            stat.print();
-         if (!resolveConflict(confl))
-            return lbool::False();
-         firstAfterConflict = true;
-         continue;
-      }
+		if (confl != CRef_Undef) {
+			++stat.conflicts;
+			if (verbosity > 0 && stat.conflicts % 20000 == 0)
+				stat.print();
+			if (!resolveConflict(confl))
+				return lbool::False();
+			firstAfterConflict = true;
+			continue;
+		}
 
-      if (firstAfterConflict)
-      {
-         firstAfterConflict = false;
-         if (restart.shouldRestart() || exchange.isFinished() || !withinBudget())
-         {
-            cancelUntil(0);
-            return lbool::Undef();
-         }
+		if (firstAfterConflict) {
+			firstAfterConflict = false;
+			if (restart.shouldRestart() || exchange.isFinished()
+					|| !withinBudget()) {
+				cancelUntil(0);
+				return lbool::Undef();
+			}
 
-         if (ig.decisionLevel() == 0)
-         {
-            if (!importClauses() || !simplify())
-               return lbool::False();
-         }
+			if (ig.decisionLevel() == 0) {
+				if (!importClauses() || !simplify())
+					return lbool::False();
+			}
 
-         if (reduce.run([&](CRef const ref)
-         {  removeClause(ref);}))
-            checkGarbage();
-      }
+			if (reduce.run([&](CRef const ref)
+			{	removeClause(ref);}))
+			{
+				checkGarbage();
+			}
+		}
 
-      Lit const next = branch.pickBranchLit();
-      if (next == Lit::Undef())
-      {
-         // Model found:
-         return lbool::True();
-      }
+		Lit const next = branch.pickBranchLit();
+		if (next == Lit::Undef()) {
+			// Model found:
+			return lbool::True();
+		}
 
 // Increase decision level and enqueue 'next'
-      ig.newDecisionLevel();
-      uncheckedEnqueue(next, ig.decisionLevel());
-      ++stat.decisions;
-   }
+		ig.newDecisionLevel();
+		uncheckedEnqueue(next, ig.decisionLevel());
+		++stat.decisions;
+	}
 }
 
 // NOTE: assumptions passed in member-variable 'assumptions'.
-template <typename TemplateConfig>
-typename Solver<TemplateConfig>::lbool Solver<TemplateConfig>::solve()
-{
-   LOG("Starts solving")
-   if (!isOk())
-      return lbool::False();
-   lbool status = lbool::Undef();
+template<typename TemplateConfig>
+typename Solver<TemplateConfig>::lbool Solver<TemplateConfig>::solve() {
+	LOG("Starts solving")
+	if (!isOk())
+		return lbool::False();
+	lbool status = lbool::Undef();
 
-   add_tmp.clear();
+	add_tmp.clear();
 
+	check();
 // Search:
-   while (status == lbool::Undef() && withinBudget() && !exchange.isFinished())
-   {
+	while (status == lbool::Undef() && withinBudget() && !exchange.isFinished()) {
 LOG("Start")
-                                                                                 assert(ig.decisionLevel() == 0);
-      branch.notifyRestart();
-      restart.notifyRestart();
-      analyze.notifyRestart();
+                                                                                 		assert(ig.decisionLevel() == 0);
+		branch.notifyRestart();
+		restart.notifyRestart();
+		analyze.notifyRestart();
 
-      importClauses();
-      if (!exchange.isOk() || !isOk() || !simplifyAll())
-         status = lbool::False();
-      else
-      {
-         ++stat.restarts;
-         status = search();
-      }
-   }
+		importClauses();
+		if (!exchange.isOk() || !isOk() || !simplifyAll())
+			status = lbool::False();
+		else {
+			++stat.restarts;
+			status = search();
+		}
+	}
 
-   if (verbosity >= 1)
-      printf("c ===============================================================================\n");
+	if (verbosity >= 1)
+		printf(
+				"c ===============================================================================\n");
 
-   if (status != lbool::Undef() && exchange.setFinished(status))
-   {
-      LOG("Solver won")
-      if (status == lbool::False())
-      {
-         drat.addEmptyClause();
-         drat.flush();
-      } else
-      {
-         if (!repropagateCurrentSolution())
-            assert(false);
-         else
-            std::cout << "c solution is correct on the given set\n";
-      }
-   } else
-      status = lbool::Undef();
-   LOG("Ends solving")
-   return status;
+	if (status != lbool::Undef() && exchange.setFinished(status)) {
+		LOG("Solver won")
+		if (status == lbool::False()) {
+			drat.addEmptyClause();
+			drat.flush();
+		} else {
+			if (!repropagateCurrentSolution())
+				assert(false);
+			else
+				std::cout << "c solution is correct on the given set\n";
+		}
+	} else
+		status = lbool::Undef();
+	LOG("Ends solving")
+	return status;
 }
 
-template <typename TemplateConfig>
-void Solver<TemplateConfig>::printFinalStats() const
-{
-   stat.printFinal();
+template<typename TemplateConfig>
+void Solver<TemplateConfig>::printFinalStats() const {
+	stat.printFinal();
 }
 
 //=================================================================================================
 // Garbage Collection methods:
 
-template <typename TemplateConfig>
-void Solver<TemplateConfig>::relocAll(typename TemplateConfig::Database& to)
-{
+template<typename TemplateConfig>
+void Solver<TemplateConfig>::relocAll(typename TemplateConfig::Database& to) {
 // All watchers:
-   propEngine.relocAll(to);
+	propEngine.relocAll(to);
 
 // All reasons:
 //
-   for (int i = 0; i < ig.nAssigns(); i++)
-   {
-      Var const v = ig.getTrailLit(i).var();
-      CRef const cr = ig.reason(v);
-      if (cr != CRef_Undef && (ca[cr].reloced() || ig.locked(cr)))
-         ca.reloc(ig.reason(v), to);
-   }
+	for (int i = 0; i < ig.nAssigns(); i++) {
+		Var const v = ig.getTrailLit(i).var();
+		CRef const cr = ig.reason(v);
+		if (cr != CRef_Undef && (ca[cr].reloced() || ig.locked(cr)))
+			ca.reloc(ig.reason(v), to);
+	}
 
 // All learnt:
 //
-   reduce.relocAll(to);
+	reduce.relocAll(to);
 
 // All original:
 //
-   int i, j;
-   for (i = j = 0; i < clauses.size(); i++)
-      if (ca[clauses[i]].mark() != 1)
-      {
-         ca.reloc(clauses[i], to);
-         clauses[j++] = clauses[i];
-      }
+	int i, j;
+	for (i = j = 0; i < clauses.size(); i++)
+		if (ca[clauses[i]].mark() != 1) {
+			ca.reloc(clauses[i], to);
+			clauses[j++] = clauses[i];
+		}
 
-   exchange.relocAll(to);
-   clauses.shrink(i - j);
+	exchange.relocAll(to);
+	clauses.shrink(i - j);
 }
 
-template <typename TemplateConfig>
-void Solver<TemplateConfig>::garbageCollect()
-{
+template<typename TemplateConfig>
+void Solver<TemplateConfig>::garbageCollect() {
 // Initialize the next region to a size corresponding to the estimated utilization degree. This
 // is not precise but should avoid some unnecessary reallocations for the new region:
-   ClauseAllocator to(ca.size() - ca.wasted());
+	ClauseAllocator to(ca.size() - ca.wasted());
 
-   relocAll(to);
-   if (verbosity >= 2)
-      printf("c |  Garbage collection:   %12d bytes => %12d bytes             |\n",
-             ca.size() * ClauseAllocator::Unit_Size, to.size() * ClauseAllocator::Unit_Size);
-   to.moveTo(ca);
+	relocAll(to);
+	if (verbosity >= 2)
+		printf(
+				"c |  Garbage collection:   %12d bytes => %12d bytes             |\n",
+				ca.size() * ClauseAllocator::Unit_Size,
+				to.size() * ClauseAllocator::Unit_Size);
+	to.moveTo(ca);
 }
 }

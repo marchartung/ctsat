@@ -224,6 +224,14 @@ class vec
       for (int i = 0; i < sz; i++)
          copy[i] = data[i];
    }
+   template<typename VecType>
+   void copyFrom(VecType const & from)
+   {
+      clear();
+      growTo(from.size());
+      for (int i = 0; i < sz; i++)
+         data[i] = from[i];
+   }
    void moveTo(vec<T>& dest)
    {
       dest.clear(true);
